@@ -1,182 +1,289 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProNet Analyzer - Hidden API Detector | Study Project</title>
+    <title>ProNet Analyzer v3.0 - Ultimate API Detector | Study Project</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: { extend: { colors: { primary: { 50: '#eff6ff', 500: '#3b82f6', 900: '#1e3a8a' } } } }
+            theme: { extend: { colors: { primary: { 50: '#eff6ff', 500: '#3b82f6', 900: '#1e3a8a' }, secondary: { 500: '#10b981' } } } }
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.1); }
-        .gradient-header { background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
-        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .glass { backdrop-filter: blur(16px); background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.18); }
+        .dark .glass { background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .nav-gradient { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .card-hover { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-8px) scale(1.02); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .skeleton-shimmer { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .sidebar-collapsed { transform: translateX(-100%); }
+        .pie-chart { width: 100px; height: 100px; border-radius: 50%; background: conic-gradient(#3b82f6 0deg 180deg, #10b981 180deg 360deg); position: relative; }
+        .pie-chart::after { content: ''; position: absolute; top: 20px; left: 20px; width: 60px; height: 60px; background: white; border-radius: 50%; }
+        .dark .pie-chart::after { background: #1f2937; }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; transform: translateX(100%); transition: transform 0.3s ease; }
+        .toast.show { transform: translateX(0); }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
-    <!-- Header -->
-    <header class="gradient-header text-white shadow-lg">
-        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <i class="fas fa-network-wired text-2xl"></i>
-                <h1 class="text-2xl font-bold">ProNet Analyzer</h1>
-                <span class="text-sm opacity-90">v2.0 - Hidden API Detector</span>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen font-sans">
+    <!-- Global Nav Bar (Next.js Style) -->
+    <nav class="nav-gradient shadow-2xl">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-globe text-3xl text-white"></i>
+                <h1 class="text-2xl font-bold text-white">ProNet Analyzer v3.0</h1>
+                <span class="text-white/80 text-sm">Ultimate Hidden API Detector</span>
             </div>
-            <button id="darkToggle" class="p-2 rounded-full bg-white/20 hover:bg-white/30">
-                <i class="fas fa-moon"></i>
-            </button>
+            <div class="flex items-center space-x-4">
+                <button id="themeToggle" class="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition">
+                    <i class="fas fa-sun"></i>
+                </button>
+                <button id="mobileMenuToggle" class="md:hidden p-2 rounded-full bg-white/20 hover:bg-white/30 text-white">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
         </div>
-    </header>
+    </nav>
 
     <div class="flex">
-        <!-- Sidebar: Modes -->
-        <aside class="w-64 bg-white dark:bg-gray-800 shadow-lg h-screen overflow-y-auto">
-            <div class="p-4">
-                <h2 class="text-lg font-semibold mb-4">Analysis Modes</h2>
-                <div class="space-y-2">
-                    <button class="w-full text-left p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition mode-btn" data-mode="posts">
-                        <i class="fas fa-newspaper mr-2"></i> Posts & Articles
+        <!-- Sidebar (Collapsible on Mobile, Next.js-like) -->
+        <aside id="sidebar" class="w-72 bg-white dark:bg-gray-800 shadow-xl h-[calc(100vh-80px)] overflow-y-auto transition-transform duration-300 z-40 fixed md:relative inset-y-20 md:inset-y-0 left-0">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-6 text-gray-800 dark:text-gray-200">Modes</h2>
+                <div class="space-y-2 mb-6">
+                    <button class="w-full text-left p-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 hover:border-blue-300 transition mode-btn active" data-mode="posts">
+                        <i class="fas fa-newspaper text-blue-500 mr-3"></i>Posts & Articles
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition mode-btn" data-mode="all-endpoints">
-                        <i class="fas fa-link mr-2"></i> All Endpoints
+                    <button class="w-full text-left p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition mode-btn" data-mode="all-endpoints">
+                        <i class="fas fa-link text-green-500 mr-3"></i>All Endpoints
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition mode-btn" data-mode="fetch">
-                        <i class="fas fa-download mr-2"></i> Fetch Calls
+                    <button class="w-full text-left p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition mode-btn" data-mode="fetch">
+                        <i class="fas fa-download text-indigo-500 mr-3"></i>Fetch Calls
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition mode-btn" data-mode="post">
-                        <i class="fas fa-upload mr-2"></i> POST Only
+                    <button class="w-full text-left p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition mode-btn" data-mode="post">
+                        <i class="fas fa-upload text-red-500 mr-3"></i>POST Only
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition mode-btn" data-mode="xhr">
-                        <i class="fas fa-exchange-alt mr-2"></i> XHR/Send
+                    <button class="w-full text-left p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition mode-btn" data-mode="xhr">
+                        <i class="fas fa-exchange-alt text-yellow-500 mr-3"></i>XHR/Send
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition mode-btn" data-mode="scripts">
-                        <i class="fas fa-code mr-2"></i> Scripts
+                    <button class="w-full text-left p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition mode-btn" data-mode="scripts">
+                        <i class="fas fa-code text-purple-500 mr-3"></i>Scripts
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900 transition mode-btn" data-mode="hidden">
-                        <i class="fas fa-eye-slash mr-2"></i> Hidden APIs (Pro)
+                    <button class="w-full text-left p-4 rounded-xl bg-red-50 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 hover:border-red-300 transition mode-btn" data-mode="hidden">
+                        <i class="fas fa-eye-slash text-red-500 mr-3"></i>Hidden APIs (Pro)
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900 transition mode-btn" data-mode="graphql">
-                        <i class="fas fa-database mr-2"></i> GraphQL
+                    <button class="w-full text-left p-4 rounded-xl bg-purple-50 dark:bg-purple-900/30 border-2 border-purple-200 dark:border-purple-800 hover:border-purple-300 transition mode-btn" data-mode="graphql">
+                        <i class="fas fa-database text-purple-500 mr-3"></i>GraphQL
                     </button>
-                    <button class="w-full text-left p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900 transition mode-btn" data-mode="ws">
-                        <i class="fas fa-comments mr-2"></i> WebSockets
+                    <button class="w-full text-left p-4 rounded-xl bg-green-50 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 hover:border-green-300 transition mode-btn" data-mode="ws">
+                        <i class="fas fa-comments text-green-500 mr-3"></i>WebSockets
+                    </button>
+                    <button class="w-full text-left p-4 rounded-xl bg-orange-50 dark:bg-orange-900/30 border-2 border-orange-200 dark:border-orange-800 hover:border-orange-300 transition mode-btn" data-mode="sitemap">
+                        <i class="fas fa-sitemap text-orange-500 mr-3"></i>Sitemap
+                    </button>
+                    <button class="w-full text-left p-4 rounded-xl bg-gray-50 dark:bg-gray-900/30 border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 transition mode-btn" data-mode="robots">
+                        <i class="fas fa-robot text-gray-500 mr-3"></i>Robots.txt
                     </button>
                 </div>
+                <hr class="my-6 border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">History</h3>
+                <div id="historyList" class="space-y-2 max-h-48 overflow-y-auto text-sm"></div>
             </div>
         </aside>
 
-        <!-- Main Content -->
-        <main class="flex-1 p-6">
-            <!-- URL Input -->
-            <div class="glass rounded-xl p-6 mb-6 shadow-md">
-                <h2 class="text-xl font-semibold mb-4">Enter Target URL</h2>
-                <div class="flex space-x-4">
-                    <input type="url" id="urlInput" placeholder="https://example.com" class="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500" required>
-                    <button id="analyzeBtn" class="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition">
-                        <i class="fas fa-search mr-2"></i> Analyze
+        <!-- Overlay for Mobile Sidebar -->
+        <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 md:hidden hidden"></div>
+
+        <!-- Main Content (Next.js Page Style) -->
+        <main class="flex-1 p-6 ml-0 md:ml-72 transition-all">
+            <!-- Hero Section -->
+            <section class="glass rounded-2xl p-8 mb-8 shadow-xl">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+                    <div>
+                        <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-2">Target Analysis</h2>
+                        <p class="text-gray-600 dark:text-gray-400">Uncover hidden endpoints & posts from any site. Pro mode detects obfuscated APIs.</p>
+                    </div>
+                    <div class="flex space-x-4">
+                        <input type="url" id="urlInput" placeholder="https://x.com" class="flex-1 max-w-md p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <button id="analyzeBtn" class="px-8 py-4 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-xl hover:from-primary-600 hover:to-secondary-600 transition-all shadow-lg font-semibold">
+                            <i class="fas fa-bolt mr-2"></i>Launch Scan
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div class="p-4 rounded-xl bg-primary-50 dark:bg-primary-900/30">
+                        <i class="fas fa-chart-line text-2xl text-primary-500 mb-2"></i>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Scan History: <span id="historyCount">0</span></p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-secondary-50 dark:bg-secondary-900/30">
+                        <i class="fas fa-shield-alt text-2xl text-secondary-500 mb-2"></i>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Pro Detection: <span id="proScore">0%</span></p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800">
+                        <i class="fas fa-filter text-2xl text-gray-500 mb-2"></i>
+                        <select id="filterSelect" class="text-sm bg-transparent">
+                            <option>All Methods</option>
+                            <option>POST</option>
+                            <option>GET</option>
+                            <option>High Score (>0.8)</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Dashboard -->
+            <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden" id="statsSection">
+                <div class="glass rounded-xl p-6 text-center card-hover">
+                    <div class="pie-chart mx-auto mb-4"></div>
+                    <h3 class="font-bold text-xl">Endpoint Types</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">POST: 60% | GET: 40%</p>
+                </div>
+                <div class="glass rounded-xl p-6 text-center card-hover">
+                    <i class="fas fa-fire text-3xl text-red-500 mb-4"></i>
+                    <h3 class="font-bold text-xl" id="highScoreCount">0</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">High Confidence Hits</p>
+                </div>
+                <div class="glass rounded-xl p-6 text-center card-hover">
+                    <i class="fas fa-clock text-3xl text-yellow-500 mb-4"></i>
+                    <h3 class="font-bold text-xl" id="scanTime">0s</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Avg Scan Time</p>
+                </div>
+                <div class="glass rounded-xl p-6 text-center card-hover">
+                    <i class="fas fa-share-alt text-3xl text-blue-500 mb-4"></i>
+                    <button id="shareBtn" class="text-sm bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">Share Results</button>
+                </div>
+            </section>
+
+            <!-- Results Grid -->
+            <section class="space-y-6">
+                <div id="loadingSkeletons" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 hidden">
+                    <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-48"></div>
+                    <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-48"></div>
+                    <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-48"></div>
+                    <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-48"></div>
+                </div>
+                <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 hidden"></div>
+                <div id="noResults" class="text-center py-12 hidden">
+                    <i class="fas fa-search text-6xl text-gray-400 mb-4"></i>
+                    <h3 class="text-2xl font-semibold text-gray-500 dark:text-gray-400 mb-2">No Results Yet</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Launch a scan to uncover hidden gems!</p>
+                </div>
+            </section>
+
+            <!-- Export Footer -->
+            <footer class="glass rounded-2xl p-6 mt-8 text-center">
+                <div class="flex justify-center space-x-4">
+                    <button id="exportJson" class="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition">
+                        <i class="fas fa-file-code mr-2"></i>JSON Export
+                    </button>
+                    <button id="exportCsv" class="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition">
+                        <i class="fas fa-file-csv mr-2"></i>CSV Export
+                    </button>
+                    <button id="clearHistory" class="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition">
+                        <i class="fas fa-trash mr-2"></i>Clear History
                     </button>
                 </div>
-                <p class="text-sm text-gray-500 mt-2">Pro Tip: Use for big sites like techcrunch.com to uncover hidden /api/ paths.</p>
-            </div>
-
-            <!-- Results Area -->
-            <div id="resultsArea" class="hidden">
-                <!-- Loading Skeleton -->
-                <div id="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                    <div class="card-hover glass rounded-lg p-4 skeleton h-48"></div>
-                    <div class="card-hover glass rounded-lg p-4 skeleton h-48"></div>
-                    <div class="card-hover glass rounded-lg p-4 skeleton h-48"></div>
-                </div>
-
-                <!-- Results Grid -->
-                <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-
-                <!-- Export Buttons -->
-                <div class="flex justify-end mt-6 space-x-3">
-                    <button id="exportJson" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
-                        <i class="fas fa-file-code mr-2"></i> Export JSON
-                    </button>
-                    <button id="exportCsv" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
-                        <i class="fas fa-file-csv mr-2"></i> Export CSV
-                    </button>
-                </div>
-            </div>
-
-            <!-- Error Display -->
-            <div id="errorMsg" class="hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"></div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-4">© 2025 ProNet Analyzer - Educational Tool Only</p>
+            </footer>
         </main>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast hidden bg-green-500 text-white p-4 rounded-lg shadow-lg"></div>
+    <!-- Toast -->
+    <div id="toast" class="toast p-4 rounded-xl shadow-2xl text-white"></div>
 
     <script>
-        // Dark Mode Toggle
-        const darkToggle = document.getElementById('darkToggle');
-        darkToggle.addEventListener('click', () => {
+        // State Management (Next.js-like)
+        let currentMode = 'posts';
+        let scanHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
+        const maxHistory = 10;
+
+        // DOM Elements
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const mobileToggle = document.getElementById('mobileMenuToggle');
+        const themeToggle = document.getElementById('themeToggle');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const urlInput = document.getElementById('urlInput');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const loadingSkeletons = document.getElementById('loadingSkeletons');
+        const noResults = document.getElementById('noResults');
+        const statsSection = document.getElementById('statsSection');
+        const historyList = document.getElementById('historyList');
+        const filterSelect = document.getElementById('filterSelect');
+        const toast = document.getElementById('toast');
+        const exportJson = document.getElementById('exportJson');
+        const exportCsv = document.getElementById('exportCsv');
+        const clearHistory = document.getElementById('clearHistory');
+        const shareBtn = document.getElementById('shareBtn');
+        const historyCount = document.getElementById('historyCount');
+
+        // Theme Toggle
+        themeToggle.addEventListener('click', () => {
             document.documentElement.classList.toggle('dark');
-            const icon = darkToggle.querySelector('i');
-            icon.classList.toggle('fa-moon');
+            const icon = themeToggle.querySelector('i');
             icon.classList.toggle('fa-sun');
+            icon.classList.toggle('fa-moon');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+        });
+        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            themeToggle.querySelector('i').classList.replace('fa-sun', 'fa-moon');
+        }
+
+        // Mobile Sidebar
+        mobileToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-collapsed');
+            sidebarOverlay.classList.toggle('hidden');
+        });
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.add('sidebar-collapsed');
+            sidebarOverlay.classList.add('hidden');
         });
 
         // Mode Selection
         document.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('bg-blue-100', 'dark:bg-blue-900'));
-                btn.classList.add('bg-blue-100', 'dark:bg-blue-900');
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active', 'bg-blue-100', 'dark:bg-blue-900'));
+                btn.classList.add('active', 'bg-blue-100', 'dark:bg-blue-900');
                 currentMode = btn.dataset.mode;
             });
         });
 
-        let currentMode = 'posts';
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const urlInput = document.getElementById('urlInput');
-        const resultsArea = document.getElementById('resultsArea');
-        const loading = document.getElementById('loading');
-        const resultsGrid = document.getElementById('resultsGrid');
-        const errorMsg = document.getElementById('errorMsg');
-        const toast = document.getElementById('toast');
+        // History Render
+        function renderHistory() {
+            historyList.innerHTML = scanHistory.slice(-maxHistory).reverse().map(h => `
+                <button class="w-full text-left p-3 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-sm" onclick="loadHistory('${h.url}', '${h.mode}')">
+                    <i class="fas fa-history mr-2"></i>${h.mode.toUpperCase()} - ${h.url} <span class="float-right text-xs text-gray-500">${new Date(h.timestamp).toLocaleDateString()}</span>
+                </button>
+            `).join('');
+            historyCount.textContent = scanHistory.length;
+        }
+        renderHistory();
 
-        function showToast(msg) {
-            toast.textContent = msg;
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
+        function loadHistory(url, mode) {
+            urlInput.value = url;
+            document.querySelector(`[data-mode="${mode}"]`).click();
+            analyze();
         }
 
-        function showError(msg) {
-            errorMsg.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> ${msg}`;
-            errorMsg.classList.remove('hidden');
-            resultsArea.classList.add('hidden');
-        }
-
-        function showLoading() {
-            loading.classList.remove('hidden');
-            resultsGrid.innerHTML = '';
-            resultsArea.classList.remove('hidden');
-        }
-
-        function hideLoading() {
-            loading.classList.add('hidden');
-        }
-
+        // Scan Function
         async function analyze() {
             const url = urlInput.value.trim();
             if (!url.startsWith('http')) {
-                showError('Enter a valid HTTPS URL!');
+                showToast('Invalid URL! Use https://example.com', 'error');
                 return;
             }
 
-            showLoading();
+            loadingSkeletons.classList.remove('hidden');
+            resultsGrid.classList.add('hidden');
+            statsSection.classList.add('hidden');
+            noResults.classList.add('hidden');
+
+            const startTime = Date.now();
             try {
                 const response = await fetch('/api/fetch', {
                     method: 'POST',
@@ -190,74 +297,140 @@
                 }
 
                 const data = await response.json();
-                hideLoading();
+                const endTime = Date.now();
+                loadingSkeletons.classList.add('hidden');
 
                 if (data.error) {
-                    showError(data.error);
-                    return;
+                    throw new Error(data.error);
                 }
 
-                const count = data.found || data.count || data.items?.length || 0;
-                showToast(`${count} items found in ${currentMode} mode!`);
+                const items = data.items || [];
+                const count = data.found || data.count || items.length;
+                showToast(`${count} endpoints detected in ${((endTime - startTime)/1000).toFixed(1)}s!`, 'success');
 
-                resultsGrid.innerHTML = (data.items || []).map(item => `
-                    <div class="card-hover glass rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                        <h3 class="font-semibold text-primary-600 dark:text-primary-400 mb-2">${item.method ? `${item.method}: ` : ''}${item.title || item.url || item.href}</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${item.context ? item.context.substring(0, 100) + '...' : item.source || 'N/A'}</p>
-                        <div class="flex space-x-2">
-                            <input class="flex-1 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded" value="${item.url || item.href}" readonly>
-                            <button onclick="copyToClipboard('${item.url || item.href}')" class="p-2 text-blue-500 hover:text-blue-700">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                            <a href="${item.url || item.href}" target="_blank" class="p-2 text-green-500 hover:text-green-700">
-                                <i class="fas fa-external-link-alt"></i>
-                            </a>
-                        </div>
-                    </div>
-                `).join('') || '<p class="col-span-full text-center text-gray-500">No items found. Try another mode!</p>';
+                // Update Stats
+                document.getElementById('highScoreCount').textContent = items.filter(i => (i.score || 0) > 0.8).length;
+                document.getElementById('scanTime').textContent = `${((endTime - startTime)/1000).toFixed(1)}s`;
+                document.getElementById('proScore').textContent = `${Math.round((items.reduce((sum, i) => sum + (i.score || 0), 0) / count * 100) || 0)}%`;
+
+                // Filter & Render Results
+                let filteredItems = items;
+                filterSelect.addEventListener('change', () => {
+                    const val = filterSelect.value;
+                    filteredItems = items.filter(i => {
+                        if (val === 'POST') return i.method === 'POST';
+                        if (val === 'GET') return i.method === 'GET';
+                        if (val === 'High Score (>0.8)') return (i.score || 0) > 0.8;
+                        return true;
+                    });
+                    renderResults(filteredItems);
+                });
+
+                renderResults(filteredItems);
+
+                // Save to History
+                scanHistory.unshift({ url, mode: currentMode, timestamp: Date.now(), count });
+                if (scanHistory.length > maxHistory) scanHistory = scanHistory.slice(0, maxHistory);
+                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+                renderHistory();
+
+                statsSection.classList.remove('hidden');
+                resultsGrid.classList.remove('hidden');
             } catch (error) {
-                hideLoading();
-                showError(`Analysis failed: ${error.message}. Check console.`);
-                console.error(error);
+                loadingSkeletons.classList.add('hidden');
+                showToast(`Scan failed: ${error.message}`, 'error');
+                noResults.classList.remove('hidden');
+                console.error('Scan error:', error);
             }
+        }
+
+        function renderResults(items) {
+            if (items.length === 0) {
+                resultsGrid.innerHTML = '<p class="col-span-full text-center text-gray-500 py-12">No matches. Refine filters!</p>';
+                return;
+            }
+            resultsGrid.innerHTML = items.map(item => `
+                <div class="card-hover glass rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-bold text-lg">${item.method ? `<span class="badge bg-${item.method === 'POST' ? 'red' : 'green'}-100 text-${item.method === 'POST' ? 'red' : 'green'}-800 px-2 py-1 rounded-full text-xs">${item.method}</span> ` : ''}${item.title || item.url}</h3>
+                        <span class="text-xs text-green-600 dark:text-green-400">${(item.score * 100).toFixed(0)}% Confidence</span>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">${item.context ? item.context.substring(0, 120) + '...' : item.source || 'N/A'}</p>
+                    <div class="flex space-x-2">
+                        <input class="flex-1 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded-lg border" value="${item.url || item.href}" readonly>
+                        <button onclick="copyToClipboard('${item.url || item.href}')" class="p-2 text-blue-500 hover:text-blue-700 rounded-lg transition">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <a href="${item.url || item.href}" target="_blank" class="p-2 text-green-500 hover:text-green-700 rounded-lg transition">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showToast(msg, type = 'success') {
+            toast.textContent = msg;
+            toast.className = `toast p-4 rounded-xl shadow-2xl text-white ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 4000);
         }
 
         function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+            navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
         }
 
         function exportData(type) {
-            const items = JSON.parse(localStorage.getItem('lastResults') || '[]');  // Assume stored
+            const items = JSON.parse(localStorage.getItem('lastResults') || '[]');
+            if (items.length === 0) return showToast('No data to export!', 'error');
             if (type === 'json') {
                 const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                downloadBlob(blob, 'results.json');
+                downloadBlob(blob, `pronet-${currentMode}-${Date.now()}.json`);
             } else {
-                let csv = 'Method,URL,Context\n';
-                items.forEach(item => csv += `"${item.method || ''}","${item.url || ''}","${item.context || ''}"\n`);
+                let csv = 'Method,URL,Context,Score\n';
+                items.forEach(item => csv += `"${item.method || ''}","${item.url || ''}","${item.context || ''}","${(item.score || 0).toFixed(2)}"\n`);
                 const blob = new Blob([csv], { type: 'text/csv' });
-                downloadBlob(blob, 'results.csv');
+                downloadBlob(blob, `pronet-${currentMode}-${Date.now()}.csv`);
             }
-            showToast(`Exported as ${type.toUpperCase()}!`);
+            showToast(`Exported ${type.toUpperCase()} successfully!`);
         }
 
         function downloadBlob(blob, filename) {
-            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
+            a.href = URL.createObjectURL(blob);
             a.download = filename;
             a.click();
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(a.href);
         }
 
-        // Store last results for export
-        // (In analyze(), after data: localStorage.setItem('lastResults', JSON.stringify(data.items || [])); )
+        function shareResults() {
+            const shareUrl = `${window.location.origin}?url=${encodeURIComponent(urlInput.value)}&mode=${currentMode}`;
+            navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied!'));
+        }
 
+        // Event Listeners
         analyzeBtn.addEventListener('click', analyze);
         urlInput.addEventListener('keypress', e => { if (e.key === 'Enter') analyze(); });
+        exportJson.addEventListener('click', () => exportData('json'));
+        exportCsv.addEventListener('click', () => exportData('csv'));
+        clearHistory.addEventListener('click', () => {
+            scanHistory = [];
+            localStorage.removeItem('scanHistory');
+            renderHistory();
+            showToast('History cleared!');
+        });
+        shareBtn.addEventListener('click', shareResults);
+        filterSelect.addEventListener('change', () => {});  // Handled in analyze
 
-        // Export listeners
-        document.getElementById('exportJson').addEventListener('click', () => exportData('json'));
-        document.getElementById('exportCsv').addEventListener('click', () => exportData('csv'));
+        // Init: Load from URL params if any
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('url')) {
+            urlInput.value = params.get('url');
+            if (params.get('mode')) {
+                document.querySelector(`[data-mode="${params.get('mode')}"]`).click();
+            }
+            setTimeout(analyze, 500);
+        }
     </script>
 </body>
 </html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Post Fetcher - Study Project</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        input[type="url"] { width: 300px; padding: 10px; margin-right: 10px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #links { margin-top: 20px; }
+        .item { display: block; padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px; }
+        .title { font-weight: bold; margin-bottom: 5px; }
+        .source { font-size: 0.9em; color: #666; margin-bottom: 5px; }
+        .link { word-break: break-all; }
+        .error { color: red; }
+        .loading { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>URL Post Fetcher</h1>
+    <p>Enter a website URL (e.g., https://news.ycombinator.com) and fetch detected posts/articles.</p>
+    
+    <input type="url" id="urlInput" placeholder="https://www.example.com" required>
+    <button onclick="fetchPosts()">Fetch Posts</button>
+    
+    <div id="links"></div>
+
+    <script>
+        async function fetchPosts() {
+            const urlInput = document.getElementById('urlInput');
+            const linksDiv = document.getElementById('links');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                alert('Please enter a valid URL');
+                return;
+            }
+
+            // Show loading
+            linksDiv.innerHTML = '<p class="loading">Fetching posts...</p>';
+
+            try {
+                const response = await fetch('/api/fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!response.ok) throw new Error('Fetch failed');
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    linksDiv.innerHTML = `<p class="error">${data.error}</p>`;
+                } else {
+                    if (data.found === 0) {
+                        linksDiv.innerHTML = '<p>No posts detected. Try a news/blog site!</p>';
+                    } else {
+                        linksDiv.innerHTML = `<h3>Found ${data.found} posts:</h3>` + 
+                            data.items.map(item => `
+                                <div class="item">
+                                    <div class="title">${item.title || 'Untitled'}</div>
+                                    <div class="source">Source: ${item.source}</div>
+                                    <a href="${item.href}" target="_blank" class="link">Link: ${item.href}</a>
+                                </div>
+                            `).join('');
+                    }
+                }
+            } catch (error) {
+                linksDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

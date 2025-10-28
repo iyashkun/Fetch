@@ -24,25 +24,125 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Invalid URL.' });
     }
 
-    console.log(`v3 Scan: Mode ${mode} on ${norm} at ${new Date().toISOString()}`);
+    console.log(`v3.1 Scan: Mode ${mode} on ${norm} at ${new Date().toISOString()}`);
 
-    // extractPosts (unchanged from previous, with score)
+    // extractPosts (full code from previous, with score – unchanged)
     async function extractPosts(html, baseUrl) {
+        console.log('Extracting posts...');
         const $ = cheerio.load(html);
         const results = new Map();
-        // ... (same as previous extractPosts code, omitted for brevity – copy from last version)
-        // Return sorted by score
+
+        // RSS/Atom
+        $('link[type="application/rss+xml"], link[type="application/atom+xml"]').each((i, el) => {
+            const href = $(el).attr("href");
+            if (href) {
+                try {
+                    const fullHref = new URL(href, baseUrl).href;
+                    results.set(fullHref, { 
+                        title: $(el).attr("title") || "RSS/Atom feed", 
+                        href: fullHref, 
+                        source: "rss",
+                        score: 0.8
+                    });
+                } catch (e) {}
+            }
+        });
+
+        // Article anchors
+        $("article a[href]").each((i, a) => {
+            const href = $(a).attr("href");
+            const title = $(a).text().trim() || $(a).attr("title") || "";
+            if (href && title.length > 5) {
+                try {
+                    const fullHref = new URL(href, baseUrl).href;
+                    if (!results.has(fullHref)) {
+                        results.set(fullHref, { 
+                            title, 
+                            href: fullHref, 
+                            source: "article",
+                            score: 0.9
+                        });
+                    }
+                } catch (e) {}
+            }
+        });
+
+        // JSON-LD
+        $('script[type="application/ld+json"]').each((i, s) => {
+            try {
+                const jsonText = $(s).contents().text().trim();
+                if (!jsonText) return;
+                const json = JSON.parse(jsonText);
+                const items = Array.isArray(json) ? json : [json];
+                items.forEach(obj => {
+                    if (!obj) return;
+                    const type = obj["@type"] || obj.type;
+                    if (!type || !/(Article|BlogPosting|NewsArticle)/i.test(type)) return;
+                    const urlProp = obj.url || obj.mainEntityOfPage;
+                    const title = obj.headline || obj.name || "";
+                    if (urlProp && title) {
+                        try {
+                            const fullHref = new URL(urlProp, baseUrl).href;
+                            results.set(fullHref, { 
+                                title, 
+                                href: fullHref, 
+                                source: "json-ld",
+                                score: 1.0
+                            });
+                        } catch (e) {}
+                    }
+                });
+            } catch (e) {
+                console.log('JSON-LD error:', e.message);
+            }
+        });
+
+        // OpenGraph
+        const ogUrl = $('meta[property="og:url"]').attr("content");
+        const ogTitle = $('meta[property="og:title"]').attr("content");
+        if (ogUrl && ogTitle) {
+            try {
+                const fullHref = new URL(ogUrl, baseUrl).href;
+                results.set(fullHref, { 
+                    title: ogTitle, 
+                    href: fullHref, 
+                    source: "opengraph",
+                    score: 0.7
+                });
+            } catch (e) {}
+        }
+
+        // Heuristic
+        $("a[href]").each((i, a) => {
+            const href = $(a).attr("href");
+            if (!href) return;
+            const text = $(a).text().trim();
+            const full = new URL(href, baseUrl).href;
+            const lc = href.toLowerCase();
+            if (/\/(post|posts|article|articles|blog|news|story)\b/.test(lc) ||
+                $(a).closest(".post, .entry, .article, .news-item").length > 0 ||
+                (text.length > 10 && text.match(/^(read|view|learn)/i))
+            ) {
+                if (!results.has(full)) {
+                    results.set(full, { 
+                        title: text || "Heuristic Link", 
+                        href: full, 
+                        source: "heuristic",
+                        score: 0.6
+                    });
+                }
+            }
+        });
+
         return Array.from(results.values()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 200);
     }
 
-    // Enhanced extractNetworkCalls (fixed scope, added sitemap/robots)
+    // extractNetworkCalls (fixed: sitemap/robots moved to async main body)
     async function extractNetworkCalls(html, baseUrl, mode) {
         const $ = cheerio.load(html);
         const results = new Set();
 
-        const commonCapture = '["\']([^"\',\\s]+)["\']';  // Defined here for scope
-
-        // JS Collection (up to 10, staggered)
+        // JS Collection (staggered batch)
         const jsCodes = [];
         $('script:not([src])').each((i, script) => {
             const code = $(script).html() || '';
@@ -58,15 +158,14 @@ module.exports = async (req, res) => {
             }
         });
 
-        // Staggered batch fetch
         const concurrency = 3;
         for (let i = 0; i < jsUrls.length; i += concurrency) {
             const batch = jsUrls.slice(i, i + concurrency);
             const batchPromises = batch.map(async (jsUrl, batchIndex) => {
                 try {
-                    await new Promise(resolve => setTimeout(resolve, batchIndex * 500));  // Stagger
+                    await new Promise(resolve => setTimeout(resolve, batchIndex * 500));
                     const response = await axios.get(jsUrl, {
-                        headers: { 'User-Agent': 'ProNetAnalyzer/3.0' },
+                        headers: { 'User-Agent': 'ProNetAnalyzer/3.1' },
                         timeout: 4000
                     });
                     return response.data;
@@ -78,7 +177,10 @@ module.exports = async (req, res) => {
             batchCodes.forEach(code => { if (code.trim()) jsCodes.push(code); });
         }
 
-        // getPatternsForMode (now includes graphql/ws/sitemap inside)
+        // commonCapture defined here
+        const commonCapture = '["\']([^"\',\\s]+)["\']';
+
+        // getPatternsForMode (sync now – no await)
         function getPatternsForMode(m) {
             const patterns = [
                 { regexStr: `axios\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['post', 'all-endpoints', 'hidden', 'graphql'] },
@@ -91,7 +193,6 @@ module.exports = async (req, res) => {
                 { regexStr: `send\\s*\\(\\s*(?:null|\\{[^}]+\\})?\\)`, flags: 'gi', group: 0, method: 'POST', modeMatch: ['xhr', 'post'] }
             ];
 
-            // GraphQL specific
             if (m === 'graphql') {
                 patterns.push(
                     { regexStr: `/graphql\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['graphql'] },
@@ -99,44 +200,10 @@ module.exports = async (req, res) => {
                 );
             }
 
-            // WebSockets
             if (m === 'ws') {
                 patterns.push(
                     { regexStr: `(ws|wss):/{2}[^"\',\\s]+`, flags: 'gi', group: 0, method: 'WS', modeMatch: ['ws'] }
                 );
-            }
-
-            // Sitemap/Robots (fetch external)
-            if (m === 'sitemap') {
-                try {
-                    const sitemapUrl = new URL('/sitemap.xml', baseUrl).href;
-                    const sitemapResp = await axios.get(sitemapUrl, { timeout: 5000 });
-                    const sitemap$ = cheerio.load(sitemapResp.data);
-                    sitemap$('loc').each((i, el) => {
-                        const loc = sitemap$(el).text().trim();
-                        if (loc) results.add(JSON.stringify({ url: loc, method: 'SITEMAP', context: 'Sitemap entry', score: 0.9 }));
-                    });
-                } catch (e) {
-                    console.log('Sitemap fetch failed');
-                }
-                return [];
-            }
-
-            if (m === 'robots') {
-                try {
-                    const robotsUrl = new URL('/robots.txt', baseUrl).href;
-                    const robotsResp = await axios.get(robotsUrl, { timeout: 5000 });
-                    const lines = robotsResp.data.split('\n');
-                    lines.forEach(line => {
-                        if (line.startsWith('Disallow:') && line.includes('/api/')) {
-                            const path = line.split(':')[1].trim();
-                            results.add(JSON.stringify({ url: new URL(path, baseUrl).href, method: 'ROBOTS-HIDDEN', context: 'Disallowed path', score: 0.95 }));
-                        }
-                    });
-                } catch (e) {
-                    console.log('Robots fetch failed');
-                }
-                return [];
             }
 
             return patterns.filter(p => p.modeMatch.includes(m));
@@ -144,7 +211,7 @@ module.exports = async (req, res) => {
 
         let patterns = getPatternsForMode(mode);
 
-        // Apply patterns
+        // Apply patterns to JS (same as before)
         patterns.forEach(({ regexStr, flags, group, method }) => {
             const regex = new RegExp(regexStr, flags);
             jsCodes.forEach(code => {
@@ -157,13 +224,6 @@ module.exports = async (req, res) => {
                         try {
                             if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
                             const context = code.substring(Math.max(0, match.index - 50), match.index + 150).trim();
-                            // Base64 decode for hidden
-                            if (mode === 'hidden' && endpoint.match(/[A-Za-z0-9+/=]{20,}/)) {
-                                try {
-                                    const decoded = Buffer.from(endpoint, 'base64').toString();
-                                    if (decoded.includes('http')) endpoint = decoded;
-                                } catch {}
-                            }
                             const item = { url: endpoint, method: meth, context, score: 0.7 + (endpoint.includes('/api/') || endpoint.includes('/v') ? 0.3 : 0) };
                             results.add(JSON.stringify(item));
                         } catch (e) {}
@@ -173,7 +233,41 @@ module.exports = async (req, res) => {
             });
         });
 
-        // Hidden mode extras (sitemap/robots already handled in getPatternsForMode)
+        // Sitemap mode (now in async context)
+        if (mode === 'sitemap') {
+            try {
+                const sitemapUrl = new URL('/sitemap.xml', baseUrl).href;
+                const sitemapResp = await axios.get(sitemapUrl, { timeout: 5000 });
+                const sitemap$ = cheerio.load(sitemapResp.data);
+                sitemap$('loc').each((i, el) => {
+                    const loc = sitemap$(el).text().trim();
+                    if (loc) {
+                        results.add(JSON.stringify({ url: loc, method: 'SITEMAP', context: 'Sitemap entry', score: 0.9 }));
+                    }
+                });
+            } catch (e) {
+                console.log('Sitemap fetch failed:', e.message);
+            }
+        }
+
+        // Robots mode (now in async context)
+        if (mode === 'robots') {
+            try {
+                const robotsUrl = new URL('/robots.txt', baseUrl).href;
+                const robotsResp = await axios.get(robotsUrl, { timeout: 5000 });
+                const lines = robotsResp.data.split('\n');
+                lines.forEach(line => {
+                    if (line.startsWith('Disallow:') && line.includes('/api/')) {
+                        const path = line.split(':')[1].trim();
+                        results.add(JSON.stringify({ url: new URL(path, baseUrl).href, method: 'ROBOTS-HIDDEN', context: 'Disallowed path', score: 0.95 }));
+                    }
+                });
+            } catch (e) {
+                console.log('Robots fetch failed:', e.message);
+            }
+        }
+
+        // Hidden mode extras (base64, minified hints)
         if (mode === 'hidden') {
             const allText = html + jsCodes.join('\n');
             const hiddenPatterns = [
@@ -188,7 +282,16 @@ module.exports = async (req, res) => {
                     if (endpoint) {
                         try {
                             const full = new URL(endpoint.startsWith('http') ? endpoint : baseUrl + endpoint).href;
-                            results.add(JSON.stringify({ url: full, method: 'HIDDEN', context: 'Obfuscated grep', score: 0.95 }));
+                            // Base64 decode attempt
+                            if (endpoint.match(/[A-Za-z0-9+/=]{20,}/)) {
+                                try {
+                                    const decoded = Buffer.from(endpoint, 'base64').toString('utf8');
+                                    if (decoded.includes('http') || decoded.includes('/api/')) {
+                                        results.add(JSON.stringify({ url: decoded, method: 'BASE64-HIDDEN', context: 'Decoded obfuscation', score: 0.98 }));
+                                    }
+                                } catch {}
+                            }
+                            results.add(JSON.stringify({ url: full, method: 'HIDDEN', context: 'Grep match', score: 0.95 }));
                         } catch {}
                     }
                 }
@@ -213,7 +316,7 @@ module.exports = async (req, res) => {
         }).filter(Boolean).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 150);
     }
 
-    // Main Try-Catch (enhanced timeout 25s)
+    // Main execution (25s timeout)
     try {
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 25000);
@@ -221,7 +324,7 @@ module.exports = async (req, res) => {
             signal: controller.signal,
             redirect: 'follow',
             headers: {
-                'User-Agent': 'ProNetAnalyzer/3.0 (Study Project)',
+                'User-Agent': 'ProNetAnalyzer/3.1 (Study Project)',
                 'Accept': 'text/html,*/*;q=0.9'
             }
         });
@@ -241,7 +344,7 @@ module.exports = async (req, res) => {
 
         res.json(data);
     } catch (err) {
-        console.error(`v3 Error ${mode} ${norm}:`, err.message, err.stack);
+        console.error(`v3.1 Error ${mode} ${norm}:`, err.message, err.stack);
         res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Scan failed.', details: err.message });
     }
 };

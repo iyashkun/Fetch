@@ -23,12 +23,12 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Invalid URL (must be http/https)' });
     }
 
-    // Existing extractPosts function (unchanged, for 'posts' mode)
+    // extractPosts function (unchanged)
     async function extractPosts(html, baseUrl) {
         const $ = cheerio.load(html);
         const results = new Map();
 
-        // 1) RSS / Atom links
+        // RSS/Atom
         $('link[type="application/rss+xml"], link[type="application/atom+xml"]').each((i, el) => {
             const href = $(el).attr("href");
             if (href) {
@@ -37,19 +37,17 @@ module.exports = async (req, res) => {
             }
         });
 
-        // 2) <article> tags -> anchors inside
-        $("article").each((i, art) => {
-            $(art).find("a[href]").each((j, a) => {
-                const href = $(a).attr("href");
-                const title = $(a).text().trim() || $(a).attr("title") || "";
-                if (href) {
-                    const fullHref = new URL(href, baseUrl).href;
-                    results.set(fullHref, { title, href: fullHref, source: "article" });
-                }
-            });
+        // Article anchors
+        $("article a[href]").each((i, a) => {
+            const href = $(a).attr("href");
+            const title = $(a).text().trim() || $(a).attr("title") || "";
+            if (href) {
+                const fullHref = new URL(href, baseUrl).href;
+                results.set(fullHref, { title, href: fullHref, source: "article" });
+            }
         });
 
-        // 3) JSON-LD scripts with @type Article or BlogPosting
+        // JSON-LD
         $('script[type="application/ld+json"]').each((i, s) => {
             try {
                 const jsonText = $(s).contents().text().trim();
@@ -59,30 +57,28 @@ module.exports = async (req, res) => {
                 items.forEach(obj => {
                     if (!obj) return;
                     const type = obj["@type"] || obj.type;
-                    if (!type) return;
-                    if (/(Article|BlogPosting|NewsArticle)/i.test(type)) {
-                        const urlProp = obj.url || obj.mainEntityOfPage || obj.headline;
-                        const title = obj.headline || obj.name || "";
-                        if (urlProp) {
-                            const fullHref = new URL(urlProp, baseUrl).href;
-                            results.set(fullHref, { title, href: fullHref, source: "json-ld" });
-                        }
+                    if (!type || !/(Article|BlogPosting|NewsArticle)/i.test(type)) return;
+                    const urlProp = obj.url || obj.mainEntityOfPage;
+                    const title = obj.headline || obj.name || "";
+                    if (urlProp) {
+                        const fullHref = new URL(urlProp, baseUrl).href;
+                        results.set(fullHref, { title, href: fullHref, source: "json-ld" });
                     }
                 });
             } catch (e) {
-                console.log('JSON-LD parse error:', e.message);
+                console.log('JSON-LD error:', e.message);
             }
         });
 
-        // 4) OpenGraph <meta property="og:url"> and meta og:title
+        // OpenGraph
         const ogUrl = $('meta[property="og:url"]').attr("content");
         const ogTitle = $('meta[property="og:title"]').attr("content");
         if (ogUrl) {
             const fullHref = new URL(ogUrl, baseUrl).href;
             results.set(fullHref, { title: ogTitle || "", href: fullHref, source: "opengraph" });
-        }
+        });
 
-        // 5) Heuristic: collect all <a> that look like post links
+        // Heuristic links
         $("a[href]").each((i, a) => {
             const href = $(a).attr("href");
             if (!href) return;
@@ -102,19 +98,17 @@ module.exports = async (req, res) => {
         return Array.from(results.values()).slice(0, 200);
     }
 
-    // Enhanced extractNetworkCalls for new modes (fixed regexes)
+    // Fixed extractNetworkCalls: Uses separate simple regexes per type
     async function extractNetworkCalls(html, baseUrl, mode) {
         const $ = cheerio.load(html);
-        const results = [];
+        const results = new Set();  // For deduping JSON strings
 
-        // Collect JS codes (inline + up to 5 external for speed)
+        // Collect JS codes
         const jsCodes = [];
-        // Inline scripts
         $('script:not([src])').each((i, script) => {
             const code = $(script).html() || '';
             if (code.trim()) jsCodes.push(code);
         });
-        // External scripts (limit 5)
         const jsUrls = [];
         $('script[src]').each((i, script) => {
             const src = $(script).attr('src');
@@ -130,99 +124,104 @@ module.exports = async (req, res) => {
                 setTimeout(() => controller.abort(), 5000);
                 const jsResp = await fetch(jsUrl, {
                     signal: controller.signal,
-                    headers: { 'User-Agent': 'StudyProjectBot/1.0 (+student@example.edu)' }
+                    headers: { 'User-Agent': 'StudyProjectBot/1.0' }
                 });
                 if (jsResp.ok) {
-                    const jsCode = await jsResp.text();
-                    jsCodes.push(jsCode);
+                    jsCodes.push(await jsResp.text());
                 }
             } catch (e) {
-                console.log(`Failed to fetch JS: ${jsUrl}`, e.message);
+                console.log(`JS fetch skip: ${jsUrl}`);
             }
         }
 
-        // Fixed regex patterns (balanced groups, tested)
-        const patterns = {
-            // For 'fetch': Matches fetch(url, {method: 'XXX'})
-            fetch: /fetch\s*\(\s*["']([^"'\s,]+)["']\s*(?:,\s*\{[^}]*(?:method\s*:\s*["']?([A-Z]+)["']?[^}]*\})?)?\s*\)/gi,
-            // For 'post': Matches POST-specific (fetch/POST, axios.post, $.post, XHR open('POST', url))
-            post: /(?:(?:fetch\s*\([^)]*method\s*[:=]\s*["']?POST["']?|\s*axios\.post\s*\(\s*["']([^"'\s,]+)["']|\s*\$\.post\s*\(\s*["']([^"'\s,]+)["']|\s*open\s*\(\s*["']?POST["']?\s*,\s*["']([^"'\s,]+)["']\s*\))?/gi,
-            // For 'xhr': Matches XHR open(method, url) + send()
-            xhr: /(?:new\s+)?XMLHttpRequest\s*\(\s*\)\s*\.\s*open\s*\(\s*["']?([A-Z]+)["']?\s*,\s*["']([^"'\s,]+)["']\s*\)\s*;\s*(?:\.send\s*\(\s*(?:null|\{[^}]+\})?\s*\))?/gi,
-            // For 'all-endpoints': All HTTP calls (fetch, axios, jQuery, XHR)
-            'all-endpoints': /(?:(?:fetch|axios\.(?:post|get)| \$\.(?:post|get)|new\s+XMLHttpRequest\s*\(\s*\)\s*\.\s*open)\s*\(\s*["']([^"'\s,]+)["']\s*(?:,\s*\{[^}]*(?:method\s*:\s*["']?([A-Z]+)["']?)?[^}]*\})?\s*\))?/gi,
-            // For 'scripts': Just collect <script src> (no regex on JS code)
-            scripts: null  // Handled separately below
-        };
-
-        let targetPattern = patterns[mode];
-        if (!targetPattern && mode !== 'scripts') {
-            targetPattern = patterns['all-endpoints'];  // Fallback
+        // Get patterns for mode (simple, separate regexes)
+        function getPatternsForMode(m) {
+            const commonCapture = '["\']([^"\',\\s]+)["\']';  // URL capture group
+            return [
+                // Axios POST
+                { regex: new RegExp(`axios\\.post\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'POST' },
+                // jQuery POST
+                { regex: new RegExp(`\\$\\.post\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'POST' },
+                // XHR open('POST', url)
+                { regex: new RegExp(`open\\s*\\(\\s*["\']?POST["\']?\\s*,\\s*${commonCapture}`, 'gi'), group: 1, method: 'POST' },
+                // Fetch with method POST
+                { regex: new RegExp(`fetch\\s*\\(\\s*${commonCapture}.*?method\\s*[:=]\\s*["\']?POST["\']?`, 'gi'), group: 1, method: 'POST' },
+                // General fetch (for 'fetch' mode)
+                { regex: new RegExp(`fetch\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'GET' },
+                // General XHR open(method, url)
+                { regex: new RegExp(`open\\s*\\(\\s*["\']?([A-Z]+)["\']?\\s*,\\s*${commonCapture}`, 'gi'), group: 2, method: '$1' },
+                // Axios GET/POST (for all)
+                { regex: new RegExp(`axios\\.(?:post|get)\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'POST' },  // Assume POST for post, but filter later
+                // jQuery get/post
+                { regex: new RegExp(`\\$\\.(?:post|get)\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'GET' }
+            ].filter(p => {
+                if (m === 'post') return p.method === 'POST';
+                if (m === 'fetch') return p.regex.source.includes('fetch');
+                if (m === 'xhr') return p.regex.source.includes('open');
+                if (m === 'all-endpoints') return true;
+                return false;
+            });
         }
 
-        // Process JS codes with regex
-        if (targetPattern && mode !== 'scripts') {
+        const patterns = getPatternsForMode(mode);
+        console.log(`Using ${patterns.length} patterns for mode: ${mode}`);
+
+        // Match loop
+        patterns.forEach(({ regex, group, method }) => {
             jsCodes.forEach(code => {
                 let match;
-                while ((match = targetPattern.exec(code)) !== null) {
-                    let endpoint = match[1] || match[2] || '';
-                    let method = match[2] || 'GET';  // Default to GET
+                while ((match = regex.exec(code)) !== null) {
+                    let endpoint = match[group] || '';
+                    let meth = method;
+                    if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
                     if (endpoint) {
                         try {
-                            endpoint = new URL(endpoint.startsWith('http') ? endpoint : baseUrl + endpoint).href;
-                            const contextStart = Math.max(0, match.index - 50);
-                            const context = code.substring(contextStart, match.index + 100).trim();
-                            // Mode-specific filters
-                            if (mode === 'post' && method.toUpperCase() !== 'POST') continue;
-                            if (mode === 'fetch' && !code.substring(match.index - 10, match.index + 5).includes('fetch')) continue;
-                            if (mode === 'xhr' && !context.includes('XMLHttpRequest') && !context.includes('open(')) continue;
-                            if (!results.find(r => r.url === endpoint)) {  // Dedupe
-                                results.push({ url: endpoint, method: method.toUpperCase(), context });
-                            }
+                            if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
+                            const context = code.substring(Math.max(0, match.index - 50), match.index + 100).trim();
+                            const item = { url: endpoint, method: meth, context };
+                            results.add(JSON.stringify(item));  // Dedupe
                         } catch (e) {
-                            // Skip invalid URLs
+                            // Skip bad URLs
                         }
                     }
                 }
             });
-        }
+        });
 
-        // Special handling for 'scripts' mode: Extract <script src>
+        // Scripts mode special
         if (mode === 'scripts') {
             $('script[src]').each((i, script) => {
                 const src = $(script).attr('src');
                 if (src) {
                     try {
                         const fullSrc = new URL(src, baseUrl).href;
-                        results.push({ url: fullSrc, method: 'SCRIPT', context: 'External script load' });
+                        results.add(JSON.stringify({ url: fullSrc, method: 'SCRIPT', context: 'External JS' }));
                     } catch {}
                 }
             });
         }
 
-        // Cap results and return
-        return results.slice(0, 100);
+        return Array.from(results).map(JSON.parse).slice(0, 100);
     }
 
     try {
-        console.log(`Processing mode: ${mode} for URL: ${norm}`);
+        console.log(`Starting ${mode} for ${norm}`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);  // 15s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         const resp = await fetch(norm, {
             signal: controller.signal,
             redirect: 'follow',
             headers: {
                 'User-Agent': 'StudyProjectBot/1.0 (+student@example.edu)',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                'Accept': 'text/html,*/*;q=0.9'
             }
         });
 
         clearTimeout(timeoutId);
 
         if (!resp.ok) {
-            console.log(`Site fetch failed: ${resp.status} ${resp.statusText}`);
-            return res.status(502).json({ error: `Failed to fetch site: ${resp.status} ${resp.statusText}`, status: resp.status });
+            return res.status(502).json({ error: `Fetch failed: ${resp.status}`, status: resp.status });
         }
 
         const html = await resp.text();
@@ -236,14 +235,10 @@ module.exports = async (req, res) => {
             data.count = data.items.length;
         }
 
-        console.log(`Success: Found ${data.found || data.count || 0} items for mode ${mode}`);
-        res.status(200).json(data);
+        console.log(`Done: ${data.found || data.count || 0} items`);
+        res.json(data);
     } catch (err) {
-        console.error('Full error details:', err.message, err.stack);
-        const statusCode = err.name === 'AbortError' ? 408 : 500;
-        res.status(statusCode).json({
-            error: err.name === 'AbortError' ? 'Request timeout - site too slow' : 'Server error during fetch/analysis',
-            details: err.message
-        });
+        console.error('Error:', err.message);
+        res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Error during fetch', details: err.message });
     }
 };

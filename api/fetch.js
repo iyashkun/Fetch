@@ -3,13 +3,12 @@ const cheerio = require('cheerio');
 
 module.exports = async (req, res) => {
     if (req.method !== 'POST') {
-        console.log('Method not POST:', req.method); // Log
-        return res.status(405).json({ error: 'Method not allowed' });
+        console.log(`Invalid method: ${req.method}`);
+        return res.status(405).json({ error: 'Only POST allowed' });
     }
 
-    const { url } = req.body;
+    const { url, mode = 'posts' } = req.body;
 
-    // Normalize URL
     function normalizeUrl(u) {
         try {
             return new URL(u).href;
@@ -18,13 +17,13 @@ module.exports = async (req, res) => {
         }
     }
 
-    const norm = normalizeUrl(url || "");
+    const norm = normalizeUrl(url);
     if (!norm) {
-        console.log('Invalid URL:', url); // Log
-        return res.status(400).json({ error: "Invalid URL – must be http/https" });
+        console.log('Invalid URL:', url);
+        return res.status(400).json({ error: 'Invalid URL (must be http/https)' });
     }
 
-    // Extract function (unchanged from before)
+    // Full extractPosts function
     async function extractPosts(html, baseUrl) {
         const $ = cheerio.load(html);
         const results = new Map();
@@ -53,24 +52,23 @@ module.exports = async (req, res) => {
         // 3) JSON-LD scripts
         $('script[type="application/ld+json"]').each((i, s) => {
             try {
-                const jsonText = $(s).contents().text();
+                const jsonText = $(s).contents().text().trim();
+                if (!jsonText) return;
                 const json = JSON.parse(jsonText);
                 const items = Array.isArray(json) ? json : [json];
                 items.forEach(obj => {
                     if (!obj) return;
                     const type = obj["@type"] || obj.type;
-                    if (!type) return;
-                    if (/(Article|BlogPosting|NewsArticle)/i.test(type)) {
-                        const urlProp = obj.url || obj.mainEntityOfPage || obj.headline;
-                        const title = obj.headline || obj.name || "";
-                        if (urlProp) {
-                            const fullHref = new URL(urlProp, baseUrl).href;
-                            results.set(fullHref, { title, href: fullHref, source: "json-ld" });
-                        }
+                    if (!type || !/(Article|BlogPosting|NewsArticle)/i.test(type)) return;
+                    const urlProp = obj.url || obj.mainEntityOfPage;
+                    const title = obj.headline || obj.name || "";
+                    if (urlProp) {
+                        const fullHref = new URL(urlProp, baseUrl).href;
+                        results.set(fullHref, { title, href: fullHref, source: "json-ld" });
                     }
                 });
             } catch (e) {
-                console.log('JSON-LD parse error:', e.message); // Log
+                console.log('JSON-LD error:', e.message);
             }
         });
 
@@ -91,49 +89,106 @@ module.exports = async (req, res) => {
             const lc = href.toLowerCase();
             if (/\/(post|posts|article|articles|blog|news|story)\b/.test(lc) ||
                 $(a).closest(".post, .entry, .article, .news-item").length > 0 ||
-                text.length > 10
+                (text.length > 10 && !results.has(full))
             ) {
-                if (!results.has(full)) {
-                    results.set(full, { title: text || "", href: full, source: "heuristic" });
-                }
+                results.set(full, { title: text || "", href: full, source: "heuristic" });
             }
         });
 
         return Array.from(results.values()).slice(0, 200);
     }
 
-    try {
-        console.log('Fetching:', norm); // Log start
-        // Fetch with timeout (Vercel default 10s, but add headers)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    // Extract POST endpoints
+    async function extractEndpoints(html, baseUrl) {
+        const $ = cheerio.load(html);
+        const endpointsSet = new Set();
 
-        const resp = await fetch(norm, { 
-            signal: controller.signal,
-            redirect: "follow", 
-            headers: { 
-                "User-Agent": "StudyProjectBot/1.0 (+student@example.edu)",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-            } 
+        // Inline scripts
+        $('script:not([src])').each((i, script) => {
+            const code = $(script).html() || '';
+            extractFromCode(code, endpointsSet);
         });
 
-        clearTimeout(timeoutId);
+        // External JS (limit 5 for speed)
+        const jsUrls = [];
+        $('script[src]').each((i, script) => {
+            if (jsUrls.length < 5) {
+                const src = new URL($(script).attr('src'), baseUrl).href;
+                jsUrls.push(src);
+            }
+        });
+
+        for (const jsUrl of jsUrls) {
+            try {
+                const jsResp = await fetch(jsUrl, { 
+                    headers: { 'User-Agent': 'StudyProjectBot/1.0' },
+                    timeout: 5000 
+                });
+                if (jsResp.ok) {
+                    const jsCode = await jsResp.text();
+                    extractFromCode(jsCode, endpointsSet);
+                }
+            } catch (e) {
+                // Skip failed JS fetches
+            }
+        }
+
+        function extractFromCode(code, set) {
+            const patterns = [
+                /fetch\s*\(\s*["']([^"'\s]+)["']\s*,\s*\{[^}]*method\s*:\s*["']?POST["']?/gi,
+                /axios\.post\s*\(\s*["']([^"'\s]+)["']/gi,
+                /\$\.post\s*\(\s*["']([^"'\s]+)["']/gi,
+                /open\s*\(\s*["']?POST["']?\s*,\s*["']([^"'\s]+)["']/gi
+            ];
+            patterns.forEach(regex => {
+                let match;
+                while ((match = regex.exec(code)) !== null) {
+                    let endpoint = match[1];
+                    if (endpoint.startsWith('/') || endpoint.startsWith('http')) {
+                        endpoint = new URL(endpoint, baseUrl).href;
+                        const context = code.substring(Math.max(0, match.index - 50), match.index + 100).trim();
+                        set.add(JSON.stringify({ url: endpoint, context }));
+                    }
+                }
+            });
+        }
+
+        return Array.from(endpointsSet).map(s => JSON.parse(s)).filter(ep => ep.url.startsWith('http')).slice(0, 50);
+    }
+
+    try {
+        console.log(`Mode: ${mode}, URL: ${norm}`);
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 10000);
+
+        const resp = await fetch(norm, {
+            signal: controller.signal,
+            redirect: 'follow',
+            headers: {
+                'User-Agent': 'StudyProjectBot/1.0 (+student@example.edu)',
+                'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9'
+            }
+        });
 
         if (!resp.ok) {
-            console.log('Fetch failed:', resp.status, resp.statusText); // Log
-            return res.status(502).json({ error: `Failed to fetch ${norm} (Status: ${resp.status}) – site might block bots or be down.`, status: resp.status });
+            console.log(`Fetch failed: ${resp.status}`);
+            return res.status(502).json({ error: `Site fetch failed: ${resp.status} ${resp.statusText}`, status: resp.status });
         }
 
         const html = await resp.text();
-        console.log('HTML fetched, length:', html.length); // Log success
-        const items = await extractPosts(html, norm);
-        res.status(200).json({ url: norm, items, found: items.length });
-    } catch (err) {
-        console.error('Full error:', err.message); // Log to Vercel
-        if (err.name === 'AbortError') {
-            res.status(408).json({ error: "Request timeout – site too slow. Try a faster URL.", details: err.message });
+        const data = { url: norm };
+
+        if (mode === 'posts') {
+            data.items = await extractPosts(html, norm);
+            data.found = data.items.length;
         } else {
-            res.status(500).json({ error: "Server error fetching the site", details: err.message });
+            data.endpoints = await extractEndpoints(html, norm);
         }
+
+        res.json(data);
+    } catch (err) {
+        console.error('Error:', err);
+        const status = err.name === 'AbortError' ? 408 : 500;
+        res.status(status).json({ error: err.message, details: err.toString() });
     }
 };

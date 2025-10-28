@@ -1,9 +1,15 @@
 {
-  "name": "fetcher-pro-v3",
-  "version": "3.0.0",
+  "name": "fetcher-pro-v4",
+  "version": "4.0.0",
   "dependencies": {
     "node-fetch": "^2.7.0",
     "cheerio": "^1.0.0-rc.12",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "puppeteer-core": "^23.0.0",
+    "@sparticuz/chromium": "^131.0.0",
+    "js-beautify": "^1.15.1"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

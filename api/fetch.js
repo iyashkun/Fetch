@@ -1,14 +1,14 @@
 const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const axios = require('axios');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
+const beautify = require('js-beautify').js;
 
 module.exports = async (req, res) => {
-    if (req.method !== 'POST') {
-        console.log(`Invalid method: ${req.method} at ${new Date().toISOString()}`);
-        return res.status(405).json({ error: 'Only POST requests allowed.' });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only.' });
 
-    const { url, mode = 'posts' } = req.body;
+    const { url, mode = 'posts', proxy = '' } = req.body;
 
     function normalizeUrl(u) {
         try {
@@ -20,13 +20,11 @@ module.exports = async (req, res) => {
     }
 
     const norm = normalizeUrl(url);
-    if (!norm) {
-        return res.status(400).json({ error: 'Invalid URL.' });
-    }
+    if (!norm) return res.status(400).json({ error: 'Invalid URL.' });
 
-    console.log(`v3.1 Scan: Mode ${mode} on ${norm} at ${new Date().toISOString()}`);
+    console.log(`v4 Scan: Mode ${mode} on ${norm} (Proxy: ${proxy ? 'Yes' : 'No'}) at ${new Date().toISOString()}`);
 
-    // extractPosts (full code from previous, with score – unchanged)
+    // extractPosts (full implementation)
     async function extractPosts(html, baseUrl) {
         console.log('Extracting posts...');
         const $ = cheerio.load(html);
@@ -137,12 +135,53 @@ module.exports = async (req, res) => {
         return Array.from(results.values()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 200);
     }
 
-    // extractNetworkCalls (fixed: sitemap/robots moved to async main body)
+    // Puppeteer Setup
+    async function launchBrowser(proxyUrl) {
+        const browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: true,
+            ...(proxyUrl ? { args: [`--proxy-server=${proxyUrl}`] } : {})
+        });
+        return browser;
+    }
+
+    // Dynamic Extraction
+    async function extractWithPuppeteer(baseUrl, mode, proxyUrl) {
+        const browser = await launchBrowser(proxyUrl);
+        const page = await browser.newPage();
+        if (proxyUrl) await page.authenticate({ username: 'user', password: 'pass' });  // Mock
+
+        const networkRequests = [];
+        page.on('request', req => {
+            if (req.url().includes('api') || req.url().includes('graphql') || req.method() === 'POST') {
+                networkRequests.push({
+                    url: req.url(),
+                    method: req.method(),
+                    score: req.url().includes('/v') ? 0.9 : 0.7
+                });
+            }
+        });
+
+        await page.goto(baseUrl, { waitUntil: 'networkidle0', timeout: 15000 });
+        await page.waitForTimeout(3000);  // Dynamic wait
+
+        const dynamicData = await page.evaluate(() => {
+            return window.performance.getEntriesByType('resource').filter(r => r.initiatorType === 'fetch' || r.initiatorType === 'xmlhttprequest');
+        });
+
+        await browser.close();
+
+        return [...networkRequests, ...dynamicData.map(d => ({ url: d.name, method: 'DYNAMIC', score: 0.85 }))].slice(0, 50);
+    }
+
+    // extractNetworkCalls (full, with all features)
     async function extractNetworkCalls(html, baseUrl, mode) {
         const $ = cheerio.load(html);
         const results = new Set();
 
-        // JS Collection (staggered batch)
+        // JS Collection (staggered)
         const jsCodes = [];
         $('script:not([src])').each((i, script) => {
             const code = $(script).html() || '';
@@ -165,8 +204,9 @@ module.exports = async (req, res) => {
                 try {
                     await new Promise(resolve => setTimeout(resolve, batchIndex * 500));
                     const response = await axios.get(jsUrl, {
-                        headers: { 'User-Agent': 'ProNetAnalyzer/3.1' },
-                        timeout: 4000
+                        headers: { 'User-Agent': 'ProNetAnalyzer/4.0' },
+                        timeout: 4000,
+                        proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false
                     });
                     return response.data;
                 } catch (e) {
@@ -177,10 +217,8 @@ module.exports = async (req, res) => {
             batchCodes.forEach(code => { if (code.trim()) jsCodes.push(code); });
         }
 
-        // commonCapture defined here
         const commonCapture = '["\']([^"\',\\s]+)["\']';
 
-        // getPatternsForMode (sync now – no await)
         function getPatternsForMode(m) {
             const patterns = [
                 { regexStr: `axios\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['post', 'all-endpoints', 'hidden', 'graphql'] },
@@ -211,7 +249,7 @@ module.exports = async (req, res) => {
 
         let patterns = getPatternsForMode(mode);
 
-        // Apply patterns to JS (same as before)
+        // Apply patterns
         patterns.forEach(({ regexStr, flags, group, method }) => {
             const regex = new RegExp(regexStr, flags);
             jsCodes.forEach(code => {
@@ -233,72 +271,74 @@ module.exports = async (req, res) => {
             });
         });
 
-        // Sitemap mode (now in async context)
+        // Puppeteer for dynamic
+        if (['hidden', 'graphql', 'ws'].includes(mode)) {
+            const dynamic = await extractWithPuppeteer(baseUrl, mode, proxy);
+            dynamic.forEach(item => results.add(JSON.stringify(item)));
+        }
+
+        // Sitemap
         if (mode === 'sitemap') {
             try {
                 const sitemapUrl = new URL('/sitemap.xml', baseUrl).href;
-                const sitemapResp = await axios.get(sitemapUrl, { timeout: 5000 });
+                const sitemapResp = await axios.get(sitemapUrl, { timeout: 5000, proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false });
                 const sitemap$ = cheerio.load(sitemapResp.data);
                 sitemap$('loc').each((i, el) => {
                     const loc = sitemap$(el).text().trim();
-                    if (loc) {
-                        results.add(JSON.stringify({ url: loc, method: 'SITEMAP', context: 'Sitemap entry', score: 0.9 }));
-                    }
+                    if (loc) results.add(JSON.stringify({ url: loc, method: 'SITEMAP', context: 'Sitemap', score: 0.9 }));
                 });
             } catch (e) {
-                console.log('Sitemap fetch failed:', e.message);
+                console.log('Sitemap error:', e.message);
             }
         }
 
-        // Robots mode (now in async context)
+        // Robots
         if (mode === 'robots') {
             try {
                 const robotsUrl = new URL('/robots.txt', baseUrl).href;
-                const robotsResp = await axios.get(robotsUrl, { timeout: 5000 });
+                const robotsResp = await axios.get(robotsUrl, { timeout: 5000, proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false });
                 const lines = robotsResp.data.split('\n');
                 lines.forEach(line => {
                     if (line.startsWith('Disallow:') && line.includes('/api/')) {
                         const path = line.split(':')[1].trim();
-                        results.add(JSON.stringify({ url: new URL(path, baseUrl).href, method: 'ROBOTS-HIDDEN', context: 'Disallowed path', score: 0.95 }));
+                        results.add(JSON.stringify({ url: new URL(path, baseUrl).href, method: 'ROBOTS-HIDDEN', context: 'Disallowed', score: 0.95 }));
                     }
                 });
             } catch (e) {
-                console.log('Robots fetch failed:', e.message);
+                console.log('Robots error:', e.message);
             }
         }
 
-        // Hidden mode extras (base64, minified hints)
+        // Hidden extras (beautify)
         if (mode === 'hidden') {
-            const allText = html + jsCodes.join('\n');
-            const hiddenPatterns = [
-                /\/api(\/[a-z0-9_-]+){1,6}/gi,
-                /\/(internal|debug|beta|staging|v\d+)\/[^"\s]+/gi,
-                /serviceWorker\.register\s*\(\s*['"]([^'"]+)['"]\)/gi
-            ];
-            hiddenPatterns.forEach(pat => {
-                let match;
-                while ((match = pat.exec(allText)) !== null) {
-                    const endpoint = match[1] || match[0];
-                    if (endpoint) {
-                        try {
-                            const full = new URL(endpoint.startsWith('http') ? endpoint : baseUrl + endpoint).href;
-                            // Base64 decode attempt
-                            if (endpoint.match(/[A-Za-z0-9+/=]{20,}/)) {
+            jsCodes.forEach(code => {
+                try {
+                    const beautified = beautify(code, { indent_size: 2 });
+                    patterns.forEach(({ regexStr, flags, group, method }) => {
+                        const regex = new RegExp(regexStr, flags);
+                        let match;
+                        while ((match = regex.exec(beautified)) !== null) {
+                            let endpoint = match[group] || match[0];
+                            let meth = method;
+                            if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
+                            if (endpoint) {
                                 try {
-                                    const decoded = Buffer.from(endpoint, 'base64').toString('utf8');
-                                    if (decoded.includes('http') || decoded.includes('/api/')) {
-                                        results.add(JSON.stringify({ url: decoded, method: 'BASE64-HIDDEN', context: 'Decoded obfuscation', score: 0.98 }));
-                                    }
-                                } catch {}
+                                    if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
+                                    const context = beautified.substring(Math.max(0, match.index - 50), match.index + 150).trim();
+                                    const item = { url: endpoint, method: meth, context, score: 0.8 + (endpoint.includes('/internal') ? 0.2 : 0) };
+                                    results.add(JSON.stringify(item));
+                                } catch (e) {}
                             }
-                            results.add(JSON.stringify({ url: full, method: 'HIDDEN', context: 'Grep match', score: 0.95 }));
-                        } catch {}
-                    }
+                            regex.lastIndex = match.index + 1;
+                        }
+                    });
+                } catch (e) {
+                    console.log('Beautify error:', e.message);
                 }
             });
         }
 
-        // Scripts mode
+        // Scripts
         if (mode === 'scripts') {
             $('script[src]').each((i, script) => {
                 const src = $(script).attr('src');
@@ -316,35 +356,45 @@ module.exports = async (req, res) => {
         }).filter(Boolean).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 150);
     }
 
-    // Main execution (25s timeout)
-    try {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 25000);
-        const resp = await fetch(norm, {
-            signal: controller.signal,
-            redirect: 'follow',
-            headers: {
-                'User-Agent': 'ProNetAnalyzer/3.1 (Study Project)',
-                'Accept': 'text/html,*/*;q=0.9'
+    // Main with retry
+    async function attemptScan(attempt = 1) {
+        try {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 30000);
+            const resp = await fetch(norm, {
+                signal: controller.signal,
+                redirect: 'follow',
+                headers: {
+                    'User-Agent': 'ProNetAnalyzer/4.0 (Study Project)',
+                    'Accept': 'text/html,*/*;q=0.9'
+                }
+            });
+
+            if (!resp.ok && attempt < 3) {
+                console.log(`Retry ${attempt}/3 for ${resp.status}`);
+                return attemptScan(attempt + 1);
             }
-        });
 
-        if (!resp.ok) return res.status(502).json({ error: `HTTP ${resp.status}: Site issue.` });
+            if (!resp.ok) return res.status(502).json({ error: `HTTP ${resp.status}. Retries exhausted.` });
 
-        const html = await resp.text();
-        const data = { url: norm };
+            const html = await resp.text();
+            const data = { url: norm };
 
-        if (mode === 'posts') {
-            data.items = await extractPosts(html, norm);
-            data.found = data.items.length;
-        } else {
-            data.items = await extractNetworkCalls(html, norm, mode);
-            data.count = data.items.length;
+            if (mode === 'posts') {
+                data.items = await extractPosts(html, norm);
+                data.found = data.items.length;
+            } else {
+                data.items = await extractNetworkCalls(html, norm, mode);
+                data.count = data.items.length;
+            }
+
+            res.json(data);
+        } catch (err) {
+            if (attempt < 3) return attemptScan(attempt + 1);
+            console.error(`v4 Error ${mode} ${norm}:`, err.message);
+            res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Extreme scan failed after retries.', details: err.message });
         }
-
-        res.json(data);
-    } catch (err) {
-        console.error(`v3.1 Error ${mode} ${norm}:`, err.message, err.stack);
-        res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Scan failed.', details: err.message });
     }
+
+    await attemptScan();
 };

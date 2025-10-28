@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Invalid URL (must be http/https)' });
     }
 
-    // extractPosts function (unchanged)
+    // extractPosts function (fixed: added missing } for OpenGraph if)
     async function extractPosts(html, baseUrl) {
         const $ = cheerio.load(html);
         const results = new Map();
@@ -70,13 +70,13 @@ module.exports = async (req, res) => {
             }
         });
 
-        // OpenGraph
+        // OpenGraph (fixed: added closing })
         const ogUrl = $('meta[property="og:url"]').attr("content");
         const ogTitle = $('meta[property="og:title"]').attr("content");
         if (ogUrl) {
             const fullHref = new URL(ogUrl, baseUrl).href;
             results.set(fullHref, { title: ogTitle || "", href: fullHref, source: "opengraph" });
-        });
+        }
 
         // Heuristic links
         $("a[href]").each((i, a) => {
@@ -98,7 +98,7 @@ module.exports = async (req, res) => {
         return Array.from(results.values()).slice(0, 200);
     }
 
-    // Fixed extractNetworkCalls: Uses separate simple regexes per type
+    // extractNetworkCalls: Separate simple regexes (unchanged from last, but verified)
     async function extractNetworkCalls(html, baseUrl, mode) {
         const $ = cheerio.load(html);
         const results = new Set();  // For deduping JSON strings
@@ -151,7 +151,7 @@ module.exports = async (req, res) => {
                 // General XHR open(method, url)
                 { regex: new RegExp(`open\\s*\\(\\s*["\']?([A-Z]+)["\']?\\s*,\\s*${commonCapture}`, 'gi'), group: 2, method: '$1' },
                 // Axios GET/POST (for all)
-                { regex: new RegExp(`axios\\.(?:post|get)\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'POST' },  // Assume POST for post, but filter later
+                { regex: new RegExp(`axios\\.(?:post|get)\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'GET' },
                 // jQuery get/post
                 { regex: new RegExp(`\\$\\.(?:post|get)\\s*\\(\\s*${commonCapture}`, 'gi'), group: 1, method: 'GET' }
             ].filter(p => {

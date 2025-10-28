@@ -2,193 +2,143 @@ const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 
 module.exports = async (req, res) => {
-    if (req.method !== 'POST') {
-        console.log(`Invalid method: ${req.method}`);
-        return res.status(405).json({ error: 'Only POST allowed' });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Only POST' });
 
     const { url, mode = 'posts' } = req.body;
 
     function normalizeUrl(u) {
-        try {
-            return new URL(u).href;
-        } catch (e) {
-            return null;
-        }
+        try { return new URL(u).href; } catch { return null; }
     }
 
     const norm = normalizeUrl(url);
-    if (!norm) {
-        console.log('Invalid URL:', url);
-        return res.status(400).json({ error: 'Invalid URL (must be http/https)' });
-    }
+    if (!norm) return res.status(400).json({ error: 'Invalid URL' });
 
-    // Full extractPosts function
+    // Existing extractPosts (unchanged)
     async function extractPosts(html, baseUrl) {
         const $ = cheerio.load(html);
         const results = new Map();
-
-        // 1) RSS / Atom links
+        // RSS
         $('link[type="application/rss+xml"], link[type="application/atom+xml"]').each((i, el) => {
             const href = $(el).attr("href");
-            if (href) {
-                const fullHref = new URL(href, baseUrl).href;
-                results.set(fullHref, { title: $(el).attr("title") || "RSS/Atom feed", href: fullHref, source: "rss" });
-            }
+            if (href) results.set(new URL(href, baseUrl).href, { title: $(el).attr("title") || "RSS", href: new URL(href, baseUrl).href, source: "rss" });
         });
-
-        // 2) <article> tags -> anchors inside
-        $("article").each((i, art) => {
-            $(art).find("a[href]").each((j, a) => {
-                const href = $(a).attr("href");
-                const title = $(a).text().trim() || $(a).attr("title") || "";
-                if (href) {
-                    const fullHref = new URL(href, baseUrl).href;
-                    results.set(fullHref, { title, href: fullHref, source: "article" });
-                }
-            });
+        // Articles
+        $("article a[href]").each((i, a) => {
+            const href = $(a).attr("href"), title = $(a).text().trim() || "";
+            if (href) results.set(new URL(href, baseUrl).href, { title, href: new URL(href, baseUrl).href, source: "article" });
         });
-
-        // 3) JSON-LD scripts
+        // JSON-LD
         $('script[type="application/ld+json"]').each((i, s) => {
             try {
-                const jsonText = $(s).contents().text().trim();
-                if (!jsonText) return;
-                const json = JSON.parse(jsonText);
+                const json = JSON.parse($(s).contents().text().trim());
                 const items = Array.isArray(json) ? json : [json];
                 items.forEach(obj => {
-                    if (!obj) return;
-                    const type = obj["@type"] || obj.type;
-                    if (!type || !/(Article|BlogPosting|NewsArticle)/i.test(type)) return;
-                    const urlProp = obj.url || obj.mainEntityOfPage;
-                    const title = obj.headline || obj.name || "";
-                    if (urlProp) {
-                        const fullHref = new URL(urlProp, baseUrl).href;
-                        results.set(fullHref, { title, href: fullHref, source: "json-ld" });
+                    if (obj["@type"] && /(Article|BlogPosting)/i.test(obj["@type"])) {
+                        const urlProp = obj.url || obj.mainEntityOfPage, title = obj.headline || "";
+                        if (urlProp) results.set(new URL(urlProp, baseUrl).href, { title, href: new URL(urlProp, baseUrl).href, source: "json-ld" });
                     }
                 });
-            } catch (e) {
-                console.log('JSON-LD error:', e.message);
-            }
+            } catch {}
         });
-
-        // 4) OpenGraph
-        const ogUrl = $('meta[property="og:url"]').attr("content");
-        const ogTitle = $('meta[property="og:title"]').attr("content");
-        if (ogUrl) {
-            const fullHref = new URL(ogUrl, baseUrl).href;
-            results.set(fullHref, { title: ogTitle || "", href: fullHref, source: "opengraph" });
-        }
-
-        // 5) Heuristic links
+        // OpenGraph
+        const ogUrl = $('meta[property="og:url"]').attr("content"), ogTitle = $('meta[property="og:title"]').attr("content");
+        if (ogUrl) results.set(new URL(ogUrl, baseUrl).href, { title: ogTitle || "", href: new URL(ogUrl, baseUrl).href, source: "opengraph" });
+        // Heuristics
         $("a[href]").each((i, a) => {
-            const href = $(a).attr("href");
-            if (!href) return;
-            const text = $(a).text().trim();
-            const full = new URL(href, baseUrl).href;
-            const lc = href.toLowerCase();
-            if (/\/(post|posts|article|articles|blog|news|story)\b/.test(lc) ||
-                $(a).closest(".post, .entry, .article, .news-item").length > 0 ||
-                (text.length > 10 && !results.has(full))
-            ) {
-                results.set(full, { title: text || "", href: full, source: "heuristic" });
+            const href = $(a).attr("href"), text = $(a).text().trim(), full = new URL(href, baseUrl).href, lc = href.toLowerCase();
+            if (/\/(post|article|blog|news)\b/.test(lc) || text.length > 10) {
+                if (!results.has(full)) results.set(full, { title: text, href: full, source: "heuristic" });
             }
         });
-
         return Array.from(results.values()).slice(0, 200);
     }
 
-    // Extract POST endpoints
-    async function extractEndpoints(html, baseUrl) {
+    // NEW: Extract Network Calls (for all new modes)
+    async function extractNetworkCalls(html, baseUrl, mode) {
         const $ = cheerio.load(html);
-        const endpointsSet = new Set();
+        const results = []; // Array for all
 
-        // Inline scripts
-        $('script:not([src])').each((i, script) => {
-            const code = $(script).html() || '';
-            extractFromCode(code, endpointsSet);
-        });
-
-        // External JS (limit 5 for speed)
+        // Get all JS code (inline + external, limit 5)
+        const jsCodes = [];
+        // Inline
+        $('script:not([src])').each((i, script) => jsCodes.push($(script).html() || ''));
+        // External
         const jsUrls = [];
         $('script[src]').each((i, script) => {
-            if (jsUrls.length < 5) {
-                const src = new URL($(script).attr('src'), baseUrl).href;
-                jsUrls.push(src);
+            if (jsUrls.length < 5) jsUrls.push(new URL($(script).attr('src'), baseUrl).href);
+        });
+        for (const jsUrl of jsUrls) {
+            try {
+                const jsResp = await fetch(jsUrl, { headers: { 'User-Agent': 'StudyProjectBot/1.0' } });
+                if (jsResp.ok) jsCodes.push(await jsResp.text());
+            } catch {}
+        }
+
+        // Patterns for different calls
+        const patterns = {
+            fetch: /fetch\s*\(\s*["']([^"'\s]+)["']\s*(?:,\s*\{[^}]*(?:method\s*:\s*["']?([A-Z]+)["']?[^}]*\})?)?/gi,
+            post: /(?:(?:fetch|axios\.post|\$\.post)\s*\(\s*["']([^"'\s]+)["']|open\s*\(\s*"POST"\s*,\s*["']([^"'\s]+)["']/gi,
+            xhr: /send\s*\(\s*(?:null|\{[^}]+\})?\s*\)\s*(?:\/\/|\n|;)/gi, // After open('POST/GET', url)
+            all: /(?:fetch|axios\.post|\$\.(?:post|get)|open\s*\(\s*["']([A-Z]+)["']\s*,\s*["']([^"'\s]+)["']/gi
+        };
+
+        const targetPattern = patterns[mode] || patterns.all;
+        let match;
+        jsCodes.forEach(code => {
+            while ((match = targetPattern.exec(code)) !== null) {
+                let endpoint = match[1] || match[2] || '';
+                let method = match[2] || 'GET'; // Default GET
+                if (endpoint.startsWith('/') || endpoint.startsWith('http')) {
+                    endpoint = new URL(endpoint, baseUrl).href;
+                    const context = code.substring(Math.max(0, match.index - 50), match.index + 100).trim();
+                    // Filter by mode
+                    if (mode === 'post' && method !== 'POST') continue;
+                    if (mode === 'fetch' && !/fetch\s*\(/.test(code.substring(match.index - 10, match.index + 10))) continue;
+                    if (mode === 'xhr' && !/XMLHttpRequest|open\s*\(/.test(context)) continue;
+                    results.push({ url: endpoint, method: method.toUpperCase(), context });
+                }
             }
         });
 
-        for (const jsUrl of jsUrls) {
-            try {
-                const jsResp = await fetch(jsUrl, { 
-                    headers: { 'User-Agent': 'StudyProjectBot/1.0' },
-                    timeout: 5000 
-                });
-                if (jsResp.ok) {
-                    const jsCode = await jsResp.text();
-                    extractFromCode(jsCode, endpointsSet);
-                }
-            } catch (e) {
-                // Skip failed JS fetches
-            }
-        }
-
-        function extractFromCode(code, set) {
-            const patterns = [
-                /fetch\s*\(\s*["']([^"'\s]+)["']\s*,\s*\{[^}]*method\s*:\s*["']?POST["']?/gi,
-                /axios\.post\s*\(\s*["']([^"'\s]+)["']/gi,
-                /\$\.post\s*\(\s*["']([^"'\s]+)["']/gi,
-                /open\s*\(\s*["']?POST["']?\s*,\s*["']([^"'\s]+)["']/gi
-            ];
-            patterns.forEach(regex => {
-                let match;
-                while ((match = regex.exec(code)) !== null) {
-                    let endpoint = match[1];
-                    if (endpoint.startsWith('/') || endpoint.startsWith('http')) {
-                        endpoint = new URL(endpoint, baseUrl).href;
-                        const context = code.substring(Math.max(0, match.index - 50), match.index + 100).trim();
-                        set.add(JSON.stringify({ url: endpoint, context }));
-                    }
-                }
+        // For 'scripts' mode: Extract <script src>
+        if (mode === 'scripts') {
+            $('script[src]').each((i, script) => {
+                const src = new URL($(script).attr('src'), baseUrl).href;
+                results.push({ url: src, type: 'script', context: 'External JS file' });
             });
         }
 
-        return Array.from(endpointsSet).map(s => JSON.parse(s)).filter(ep => ep.url.startsWith('http')).slice(0, 50);
+        // Dedupe & cap
+        const unique = [...new Set(results.map(r => JSON.stringify(r)))].map(JSON.parse).slice(0, 100);
+        return unique;
     }
 
     try {
-        console.log(`Mode: ${mode}, URL: ${norm}`);
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 10000);
+        setTimeout(() => controller.abort(), 15000); // 15s for more JS
 
         const resp = await fetch(norm, {
             signal: controller.signal,
             redirect: 'follow',
-            headers: {
-                'User-Agent': 'StudyProjectBot/1.0 (+student@example.edu)',
-                'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9'
-            }
+            headers: { 'User-Agent': 'StudyProjectBot/1.0 (+student@example.edu)', 'Accept': 'text/html,*/*' }
         });
 
-        if (!resp.ok) {
-            console.log(`Fetch failed: ${resp.status}`);
-            return res.status(502).json({ error: `Site fetch failed: ${resp.status} ${resp.statusText}`, status: resp.status });
-        }
+        if (!resp.ok) return res.status(502).json({ error: `Fetch failed: ${resp.status}`, status: resp.status });
 
         const html = await resp.text();
-        const data = { url: norm };
+        let data = { url: norm };
 
         if (mode === 'posts') {
             data.items = await extractPosts(html, norm);
             data.found = data.items.length;
         } else {
-            data.endpoints = await extractEndpoints(html, norm);
+            data.items = await extractNetworkCalls(html, norm, mode);
+            data.count = data.items.length;
         }
 
         res.json(data);
     } catch (err) {
         console.error('Error:', err);
-        const status = err.name === 'AbortError' ? 408 : 500;
-        res.status(status).json({ error: err.message, details: err.toString() });
+        res.status(err.name === 'AbortError' ? 408 : 500).json({ error: err.message, details: err.toString() });
     }
 };

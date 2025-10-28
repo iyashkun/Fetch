@@ -4,17 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>URL Post Fetcher - Study Project</title>
-    <!-- Bootstrap CSS for better styling -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
         .main-card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn-fetch { background: linear-gradient(45deg, #007bff, #0056b3); border: none; }
+        .btn-fetch { background: linear-gradient(45deg, #007bff, #0056b3); border: none; color: white; }
         .btn-fetch:hover { background: linear-gradient(45deg, #0056b3, #004494); }
-        .result-card { transition: transform 0.2s; }
+        .result-card { transition: transform 0.2s; border-left: 4px solid #007bff; }
         .result-card:hover { transform: translateY(-2px); }
         .copy-btn { font-size: 0.8em; }
-        .spinner-border-sm { width: 1rem; height: 1rem; }
+        .nav-tabs .nav-link.active { background-color: #007bff; color: white; }
+        .endpoint-card { border-left: 4px solid #dc3545; }
     </style>
 </head>
 <body>
@@ -24,54 +24,72 @@
                 <div class="card main-card">
                     <div class="card-header bg-primary text-white text-center">
                         <h2>🔍 URL Post Fetcher</h2>
-                        <p class="mb-0">Enter a website URL to fetch detected posts/articles (e.g., https://news.ycombinator.com)</p>
+                        <p class="mb-0">Extract posts or POST endpoints from websites (Study Project)</p>
                     </div>
                     <div class="card-body">
-                        <form id="urlForm" onsubmit="fetchPosts(event)">
+                        <form id="urlForm">
                             <div class="input-group mb-3">
                                 <span class="input-group-text">🌐</span>
-                                <input type="url" class="form-control" id="urlInput" placeholder="https://www.example.com" required>
-                                <button class="btn btn-fetch" type="submit">Fetch Posts</button>
+                                <input type="url" class="form-control" id="urlInput" placeholder="https://news.ycombinator.com" required>
+                                <button class="btn btn-success me-2" type="button" onclick="setMode('posts'); submitForm();">Fetch Posts</button>
+                                <button class="btn btn-warning" type="button" onclick="setMode('endpoints'); submitForm();">Fetch POST Endpoints</button>
                             </div>
-                            <div class="form-text">Tip: Use HTTPS URLs for best results. Press Enter to submit!</div>
+                            <input type="hidden" id="fetchMode" value="posts">
+                            <div class="form-text">HTTPS only. Endpoints via JS static analysis!</div>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="results" class="row mt-4"></div>
+        <div id="resultsContainer" class="mt-4" style="display:none;">
+            <ul class="nav nav-tabs" id="resultsTabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="posts-tab" href="#posts">Posts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="endpoints-tab" href="#endpoints">POST Endpoints</a>
+                </li>
+            </ul>
+            <div class="tab-content mt-3">
+                <div class="tab-pane fade show active" id="posts"></div>
+                <div class="tab-pane fade" id="endpoints"></div>
+            </div>
+        </div>
     </div>
 
-    <!-- Bootstrap JS (optional, for any interactive bits) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        async function fetchPosts(event) {
-            event?.preventDefault(); // Stop form submit if needed
+        let currentMode = 'posts';
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('fetchMode').value = mode;
+        }
+
+        function submitForm() {
+            const form = document.getElementById('urlForm');
             const urlInput = document.getElementById('urlInput');
-            const resultsDiv = document.getElementById('results');
             const url = urlInput.value.trim();
-            
-            if (!url) {
-                alert('Please enter a valid URL!');
-                return;
-            }
-
             if (!url.startsWith('http')) {
-                alert('URL must start with http:// or https://');
+                alert('Valid URL daalo bhai!');
                 return;
             }
+            handleSubmit(new Event('submit'), url);
+        }
 
-            // Show loading
-            resultsDiv.innerHTML = `
-                <div class="col-12">
-                    <div class="text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="mt-2 text-muted">Fetching posts from ${url}...</p>
-                    </div>
+        async function handleSubmit(event, url) {
+            event?.preventDefault();
+            const resultsContainer = document.getElementById('resultsContainer');
+            const postsPane = document.getElementById('posts');
+            const endpointsPane = document.getElementById('endpoints');
+
+            // Loading
+            resultsContainer.style.display = 'block';
+            postsPane.innerHTML = endpointsPane.innerHTML = `
+                <div class="text-center p-4">
+                    <div class="spinner-border text-primary mb-2" role="status"></div>
+                    <p class="text-muted">Loading ${currentMode} for ${url}...</p>
                 </div>
             `;
 
@@ -79,94 +97,91 @@
                 const response = await fetch('/api/fetch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
+                    body: JSON.stringify({ url, mode: currentMode })
                 });
 
-                // Log for debugging
-                console.log('API Response Status:', response.status, response.statusText);
+                console.log('Response Status:', response.status);
 
                 if (!response.ok) {
-                    const errorText = await response.text(); // Get error body
-                    throw new Error(`API Error ${response.status}: ${response.statusText} - ${errorText}`);
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP ${response.status}`);
                 }
 
                 const data = await response.json();
-                
+
                 if (data.error) {
-                    resultsDiv.innerHTML = `
-                        <div class="col-12">
-                            <div class="alert alert-danger" role="alert">
-                                <h5>❌ Error:</h5>
-                                <p>${data.error}</p>
-                                ${data.details ? `<small>Details: ${data.details}</small>` : ''}
-                            </div>
-                        </div>
-                    `;
+                    const pane = currentMode === 'posts' ? postsPane : endpointsPane;
+                    pane.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}${data.details ? '<br><small>' + data.details + '</small>' : ''}</div>`;
                     return;
                 }
 
-                if (data.found === 0) {
-                    resultsDiv.innerHTML = `
-                        <div class="col-12">
-                            <div class="alert alert-warning" role="alert">
-                                <h5>ℹ️ No posts detected</h5>
-                                <p>Try a news or blog site like https://techcrunch.com!</p>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    resultsDiv.innerHTML = `<h4 class="col-12 mb-3">Found ${data.found} posts:</h4>` + 
-                        data.items.map((item, index) => `
-                            <div class="col-md-6 col-lg-4 mb-3">
-                                <div class="card result-card h-100">
+                if (currentMode === 'posts') {
+                    document.getElementById('posts-tab').textContent = `Posts (${data.found || 0})`;
+                    if (!data.items || data.items.length === 0) {
+                        postsPane.innerHTML = '<div class="alert alert-warning">No posts found. Try a blog/news site!</div>';
+                    } else {
+                        postsPane.innerHTML = data.items.map(item => `
+                            <div class="col-12 mb-3">
+                                <div class="card result-card">
                                     <div class="card-body">
-                                        <h6 class="card-title">${item.title || 'Untitled Post'}</h6>
-                                        <p class="card-text small text-muted">Source: ${item.source}</p>
-                                        <p class="card-text"><small class="text-body-secondary">Link:</small></p>
-                                        <div class="input-group input-group-sm">
+                                        <h6 class="card-title">${item.title || 'No Title'}</h6>
+                                        <small class="text-muted">Source: ${item.source}</small>
+                                        <div class="input-group mt-2">
                                             <input type="text" class="form-control" value="${item.href}" readonly>
-                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyLink('${item.href}')">Copy</button>
+                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyToClipboard('${item.href}')">Copy</button>
                                         </div>
-                                        <a href="${item.href}" target="_blank" class="btn btn-primary btn-sm mt-2 w-100">Open Post</a>
+                                        <a href="${item.href}" target="_blank" class="btn btn-primary mt-2">Open Post</a>
                                     </div>
                                 </div>
                             </div>
                         `).join('');
+                    }
+                    new bootstrap.Tab('#posts').show();
+                } else {
+                    document.getElementById('endpoints-tab').textContent = `POST Endpoints (${data.endpoints?.length || 0})`;
+                    const pane = endpointsPane;
+                    if (!data.endpoints || data.endpoints.length === 0) {
+                        pane.innerHTML = '<div class="alert alert-warning">No POST endpoints detected. Site might not use JS POSTs.</div>';
+                    } else {
+                        pane.innerHTML = data.endpoints.map(ep => `
+                            <div class="col-12 mb-3">
+                                <div class="card result-card endpoint-card">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-danger">POST: ${ep.url}</h6>
+                                        <small class="text-muted">Context: ${ep.context.substring(0, 100)}...</small>
+                                        <div class="input-group mt-2">
+                                            <input type="text" class="form-control" value="${ep.url}" readonly>
+                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyToClipboard('${ep.url}')">Copy</button>
+                                        </div>
+                                        <a href="${ep.url}" target="_blank" class="btn btn-danger mt-2">Test Endpoint</a>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                    new bootstrap.Tab('#endpoints').show();
                 }
             } catch (error) {
-                console.error('Full Error:', error); // For debugging
-                resultsDiv.innerHTML = `
-                    <div class="col-12">
-                        <div class="alert alert-danger" role="alert">
-                            <h5>❌ Fetch Failed:</h5>
-                            <p>${error.message}</p>
-                            <hr>
-                            <small>Check console (F12) for details. Common fixes: Check Vercel logs or try another URL.</small>
-                        </div>
-                    </div>
-                `;
+                console.error('Error:', error);
+                const pane = currentMode === 'posts' ? postsPane : endpointsPane;
+                pane.innerHTML = `<div class="alert alert-danger"><strong>❌ Failed:</strong> ${error.message}<br><small>Check console/Vercel logs.</small></div>`;
             }
         }
 
-        function copyLink(link) {
-            navigator.clipboard.writeText(link).then(() => {
-                alert('Link copied!');
-            }).catch(() => {
-                // Fallback
-                const textArea = document.createElement('textarea');
-                textArea.value = link;
-                document.body.appendChild(textArea);
-                textArea.select();
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
                 document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('Link copied!');
+                document.body.removeChild(textarea);
+                alert('Copied!');
             });
         }
 
-        // Allow Enter key in input
-        document.getElementById('urlInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') fetchPosts();
-        });
+        // Enter key support
+        document.getElementById('urlInput').addEventListener('keypress', e => { if (e.key === 'Enter') submitForm(); });
     </script>
 </body>
 </html>

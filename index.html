@@ -3,39 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Post Fetcher - Study Project</title>
+    <title>URL Network Fetcher - Study Project</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
         .main-card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn-fetch { background: linear-gradient(45deg, #007bff, #0056b3); border: none; color: white; }
-        .btn-fetch:hover { background: linear-gradient(45deg, #0056b3, #004494); }
+        .btn-mode { margin: 0 2px; padding: 8px 12px; font-size: 0.9em; }
         .result-card { transition: transform 0.2s; border-left: 4px solid #007bff; }
         .result-card:hover { transform: translateY(-2px); }
         .copy-btn { font-size: 0.8em; }
         .nav-tabs .nav-link.active { background-color: #007bff; color: white; }
-        .endpoint-card { border-left: 4px solid #dc3545; }
+        .post-card { border-left-color: #dc3545 !important; }
+        .get-card { border-left-color: #28a745 !important; }
+        .script-card { border-left-color: #ffc107 !important; }
     </style>
 </head>
 <body>
     <div class="container mt-5">
         <div class="row justify-content-center">
-            <div class="col-md-8">
+            <div class="col-md-10">
                 <div class="card main-card">
                     <div class="card-header bg-primary text-white text-center">
-                        <h2>🔍 URL Post Fetcher</h2>
-                        <p class="mb-0">Extract posts or POST endpoints from websites (Study Project)</p>
+                        <h2>🔍 URL Network Fetcher</h2>
+                        <p class="mb-0">Extract posts, endpoints, fetch, POST, XHR, scripts (Study Project)</p>
                     </div>
                     <div class="card-body">
                         <form id="urlForm">
                             <div class="input-group mb-3">
                                 <span class="input-group-text">🌐</span>
                                 <input type="url" class="form-control" id="urlInput" placeholder="https://news.ycombinator.com" required>
-                                <button class="btn btn-success me-2" type="button" onclick="setMode('posts'); submitForm();">Fetch Posts</button>
-                                <button class="btn btn-warning" type="button" onclick="setMode('endpoints'); submitForm();">Fetch POST Endpoints</button>
+                            </div>
+                            <div class="d-flex flex-wrap justify-content-center gap-2">
+                                <button class="btn btn-success btn-mode" type="button" onclick="setMode('posts'); submitForm();">Posts</button>
+                                <button class="btn btn-info btn-mode" type="button" onclick="setMode('all-endpoints'); submitForm();">All Endpoints</button>
+                                <button class="btn btn-primary btn-mode" type="button" onclick="setMode('fetch'); submitForm();">Fetch Calls</button>
+                                <button class="btn btn-danger btn-mode" type="button" onclick="setMode('post'); submitForm();">POST Only</button>
+                                <button class="btn btn-warning btn-mode" type="button" onclick="setMode('xhr'); submitForm();">XHR/Send</button>
+                                <button class="btn btn-secondary btn-mode" type="button" onclick="setMode('scripts'); submitForm();">Scripts</button>
                             </div>
                             <input type="hidden" id="fetchMode" value="posts">
-                            <div class="form-text">HTTPS only. Endpoints via JS static analysis!</div>
+                            <div class="form-text text-center mt-2">Pick a mode & Enter URL. Static JS analysis!</div>
                         </form>
                     </div>
                 </div>
@@ -43,17 +50,9 @@
         </div>
 
         <div id="resultsContainer" class="mt-4" style="display:none;">
-            <ul class="nav nav-tabs" id="resultsTabs">
-                <li class="nav-item">
-                    <a class="nav-link active" id="posts-tab" href="#posts">Posts</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="endpoints-tab" href="#endpoints">POST Endpoints</a>
-                </li>
-            </ul>
+            <ul class="nav nav-tabs" id="resultsTabs"></ul>
             <div class="tab-content mt-3">
-                <div class="tab-pane fade show active" id="posts"></div>
-                <div class="tab-pane fade" id="endpoints"></div>
+                <div class="tab-pane fade show active" id="main-pane"></div>
             </div>
         </div>
     </div>
@@ -61,6 +60,14 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentMode = 'posts';
+        const modeTabs = {
+            'posts': { color: 'success', label: 'Posts' },
+            'all-endpoints': { color: 'info', label: 'All Endpoints' },
+            'fetch': { color: 'primary', label: 'Fetch Calls' },
+            'post': { color: 'danger', label: 'POST Only' },
+            'xhr': { color: 'warning', label: 'XHR/Send' },
+            'scripts': { color: 'secondary', label: 'Scripts' }
+        };
 
         function setMode(mode) {
             currentMode = mode;
@@ -68,11 +75,10 @@
         }
 
         function submitForm() {
-            const form = document.getElementById('urlForm');
             const urlInput = document.getElementById('urlInput');
             const url = urlInput.value.trim();
             if (!url.startsWith('http')) {
-                alert('Valid URL daalo bhai!');
+                alert('Valid URL daalo!');
                 return;
             }
             handleSubmit(new Event('submit'), url);
@@ -81,12 +87,13 @@
         async function handleSubmit(event, url) {
             event?.preventDefault();
             const resultsContainer = document.getElementById('resultsContainer');
-            const postsPane = document.getElementById('posts');
-            const endpointsPane = document.getElementById('endpoints');
+            const mainPane = document.getElementById('main-pane');
+            const resultsTabs = document.getElementById('resultsTabs');
 
-            // Loading
+            // Reset tabs
+            resultsTabs.innerHTML = '';
             resultsContainer.style.display = 'block';
-            postsPane.innerHTML = endpointsPane.innerHTML = `
+            mainPane.innerHTML = `
                 <div class="text-center p-4">
                     <div class="spinner-border text-primary mb-2" role="status"></div>
                     <p class="text-muted">Loading ${currentMode} for ${url}...</p>
@@ -100,71 +107,58 @@
                     body: JSON.stringify({ url, mode: currentMode })
                 });
 
-                console.log('Response Status:', response.status);
+                console.log('Status:', response.status);
 
                 if (!response.ok) {
-                    const errData = await response.json();
+                    const errData = await response.json().catch(() => ({}));
                     throw new Error(errData.error || `HTTP ${response.status}`);
                 }
 
                 const data = await response.json();
 
                 if (data.error) {
-                    const pane = currentMode === 'posts' ? postsPane : endpointsPane;
-                    pane.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}${data.details ? '<br><small>' + data.details + '</small>' : ''}</div>`;
+                    mainPane.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}${data.details ? '<br><small>' + data.details + '</small>' : ''}</div>`;
                     return;
                 }
 
-                if (currentMode === 'posts') {
-                    document.getElementById('posts-tab').textContent = `Posts (${data.found || 0})`;
-                    if (!data.items || data.items.length === 0) {
-                        postsPane.innerHTML = '<div class="alert alert-warning">No posts found. Try a blog/news site!</div>';
-                    } else {
-                        postsPane.innerHTML = data.items.map(item => `
-                            <div class="col-12 mb-3">
-                                <div class="card result-card">
-                                    <div class="card-body">
-                                        <h6 class="card-title">${item.title || 'No Title'}</h6>
-                                        <small class="text-muted">Source: ${item.source}</small>
-                                        <div class="input-group mt-2">
-                                            <input type="text" class="form-control" value="${item.href}" readonly>
-                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyToClipboard('${item.href}')">Copy</button>
-                                        </div>
-                                        <a href="${item.href}" target="_blank" class="btn btn-primary mt-2">Open Post</a>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                    new bootstrap.Tab('#posts').show();
+                const count = data.found || data.count || data.items?.length || 0;
+                const tabHtml = `<li class="nav-item"><a class="nav-link active" href="#main-pane">${modeTabs[currentMode].label} (${count})</a></li>`;
+                resultsTabs.innerHTML = tabHtml;
+
+                if (count === 0) {
+                    mainPane.innerHTML = `<div class="alert alert-warning"><strong>No ${currentMode} found!</strong> Try another site/mode.</div>`;
                 } else {
-                    document.getElementById('endpoints-tab').textContent = `POST Endpoints (${data.endpoints?.length || 0})`;
-                    const pane = endpointsPane;
-                    if (!data.endpoints || data.endpoints.length === 0) {
-                        pane.innerHTML = '<div class="alert alert-warning">No POST endpoints detected. Site might not use JS POSTs.</div>';
-                    } else {
-                        pane.innerHTML = data.endpoints.map(ep => `
-                            <div class="col-12 mb-3">
-                                <div class="card result-card endpoint-card">
+                    let cards = '';
+                    const items = data.items || data.endpoints || data.scripts || [];
+                    items.forEach(item => {
+                        let cardClass = 'result-card';
+                        let methodBadge = '';
+                        if (currentMode === 'post') cardClass += ' post-card';
+                        else if (currentMode === 'scripts') cardClass += ' script-card';
+                        else if (item.method === 'GET') cardClass += ' get-card';
+                        if (item.method) methodBadge = `<span class="badge bg-${item.method === 'POST' ? 'danger' : 'success'} ms-2">${item.method}</span>`;
+
+                        cards += `
+                            <div class="col-12 col-md-6 col-lg-4 mb-3">
+                                <div class="card ${cardClass}">
                                     <div class="card-body">
-                                        <h6 class="card-title text-danger">POST: ${ep.url}</h6>
-                                        <small class="text-muted">Context: ${ep.context.substring(0, 100)}...</small>
+                                        <h6 class="card-title">${item.method ? `${item.method} ` : ''}${item.url || item.href}</h6>
+                                        <small class="text-muted">Context: ${item.context ? item.context.substring(0, 80) + '...' : item.source || ''}</small>
                                         <div class="input-group mt-2">
-                                            <input type="text" class="form-control" value="${ep.url}" readonly>
-                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyToClipboard('${ep.url}')">Copy</button>
+                                            <input type="text" class="form-control" value="${item.url || item.href}" readonly>
+                                            <button class="btn btn-outline-secondary copy-btn" onclick="copyToClipboard('${item.url || item.href}')">Copy</button>
                                         </div>
-                                        <a href="${ep.url}" target="_blank" class="btn btn-danger mt-2">Test Endpoint</a>
+                                        <a href="${item.url || item.href}" target="_blank" class="btn btn-primary mt-2 w-100">Open/Test</a>
                                     </div>
                                 </div>
                             </div>
-                        `).join('');
-                    }
-                    new bootstrap.Tab('#endpoints').show();
+                        `;
+                    });
+                    mainPane.innerHTML = `<div class="row">${cards}</div>`;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                const pane = currentMode === 'posts' ? postsPane : endpointsPane;
-                pane.innerHTML = `<div class="alert alert-danger"><strong>❌ Failed:</strong> ${error.message}<br><small>Check console/Vercel logs.</small></div>`;
+                mainPane.innerHTML = `<div class="alert alert-danger"><strong>❌ Failed:</strong> ${error.message}<br><small>Console/Vercel logs check karo.</small></div>`;
             }
         }
 
@@ -180,7 +174,6 @@
             });
         }
 
-        // Enter key support
         document.getElementById('urlInput').addEventListener('keypress', e => { if (e.key === 'Enter') submitForm(); });
     </script>
 </body>

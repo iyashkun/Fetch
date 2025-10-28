@@ -215,7 +215,7 @@
                                 <p class="text-xs text-gray-300 font-medium">Score: <span id="proScore" class="font-semibold text-green-400">0%</span></p>
                             </div>
                             <div class="p-4 rounded-lg bg-amber-900/20 border border-amber-800/30">
-                                <div class="dropdown">
+                                <div class="dropdown" id="filterDropdown">
                                     <div class="dropdown-toggle text-xs bg-transparent border border-amber-700/50 text-amber-300 rounded-lg p-2 font-medium">
                                         All <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
                                     </div>
@@ -229,7 +229,7 @@
                                 </div>
                             </div>
                             <div class="p-4 rounded-lg bg-gray-900/20 border border-gray-800/30">
-                                <div class="dropdown">
+                                <div class="dropdown" id="proxyDropdown">
                                     <div class="dropdown-toggle text-xs bg-transparent border border-gray-700/50 text-gray-300 rounded-lg p-2 font-medium">
                                         No Proxy <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
                                     </div>
@@ -376,7 +376,10 @@
         let currentMode = 'posts';
         let scanHistory = JSON.parse(localStorage.getItem('scanHistory') || '[]');
         let proxies = JSON.parse(localStorage.getItem('proxies') || '[]');
+        let currentFilter = 'All';
+        let currentProxy = 'No Proxy';
         const maxHistory = 20;
+        let lastItems = [];
 
         // DOM Elements
         const sidebar = document.getElementById('sidebar');
@@ -424,23 +427,38 @@
             const menu = dropdown.querySelector('.dropdown-menu');
             const items = dropdown.querySelectorAll('.dropdown-item');
 
-            toggle.addEventListener('click', () => {
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
                 dropdown.classList.toggle('open');
             });
 
             items.forEach(item => {
-                item.addEventListener('click', () => {
-                    toggle.textContent = item.textContent.replace(/ <iconify-icon.*<\/iconify-icon>$/, '');
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const text = item.textContent.trim();
+                    const iconMatch = text.match(/ <iconify-icon.*<\/iconify-icon>$/);
+                    const cleanText = iconMatch ? text.replace(iconMatch[0], '') : text;
+                    toggle.innerHTML = `${cleanText} <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>`;
                     dropdown.classList.remove('open');
                     // Handle specific actions
                     if (item.dataset.lang) showToast(`Language: ${item.dataset.lang.toUpperCase()}`);
                     if (item.dataset.filter) {
-                        // Mock filter change
-                        showToast(`Filter: ${item.dataset.filter}`);
+                        currentFilter = item.dataset.filter;
+                        if (lastItems.length > 0) {
+                            const filteredItems = lastItems.filter(i => {
+                                if (currentFilter === 'POST') return i.method === 'POST';
+                                if (currentFilter === 'GET') return i.method === 'GET';
+                                if (currentFilter === 'High Score (>0.8)') return (i.score || 0) > 0.8;
+                                if (currentFilter === 'Hidden') return i.method && i.method.includes('HIDDEN');
+                                return true;
+                            });
+                            renderResults(filteredItems);
+                        }
+                        showToast(`Filter: ${currentFilter}`);
                     }
                     if (item.dataset.proxy) {
-                        proxySelect.value = item.dataset.proxy; // Assuming proxySelect exists, but using custom
-                        showToast(`Proxy: ${item.dataset.proxy}`);
+                        currentProxy = item.dataset.proxy;
+                        showToast(`Proxy: ${currentProxy}`);
                     }
                 });
             });
@@ -517,7 +535,7 @@
                 showToast('Invalid URL.', 'error');
                 return;
             }
-            const useProxy = proxies[0] || '';
+            const useProxy = currentProxy === 'Rotate Free Proxies' ? proxies[0] || '' : '';
 
             loadingSkeletons.classList.remove('hidden');
             resultsGrid.classList.add('hidden');
@@ -526,30 +544,46 @@
 
             const startTime = Date.now();
             try {
-                // Mock API call
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                const items = Array.from({length: 8}, (_, i) => ({
-                    method: i % 2 ? 'POST' : 'GET',
-                    url: `https://example.com/api/${i}`,
-                    score: Math.random(),
-                    context: 'Sample context'
-                }));
+                const response = await fetch('/api/fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, mode: currentMode, proxy: useProxy })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
                 const endTime = Date.now();
                 loadingSkeletons.classList.add('hidden');
 
-                const count = items.length;
-                showToast(`${count} found in ${((endTime - startTime)/1000).toFixed(1)}s.`);
+                if (data.error) {
+                    throw new Error(data.error);
+                }
 
-                document.getElementById('highScoreCount').textContent = items.filter(i => i.score > 0.8).length;
+                lastItems = data.items || [];
+                const count = data.found || data.count || lastItems.length;
+                showToast(`${count} found in ${((endTime - startTime)/1000).toFixed(1)}s! ${useProxy ? '(Via Proxy)' : ''}`);
+
+                document.getElementById('highScoreCount').textContent = lastItems.filter(i => (i.score || 0) > 0.8).length;
                 document.getElementById('scanTime').textContent = `${((endTime - startTime)/1000).toFixed(1)}s`;
-                document.getElementById('proScore').textContent = `${Math.round(items.reduce((sum, i) => sum + i.score, 0) / count * 100)}%`;
+                document.getElementById('proScore').textContent = `${Math.round((lastItems.reduce((sum, i) => sum + (i.score || 0), 0) / count * 100) || 0)}%`;
 
-                renderResults(items);
+                const filteredItems = lastItems.filter(i => {
+                    if (currentFilter === 'POST') return i.method === 'POST';
+                    if (currentFilter === 'GET') return i.method === 'GET';
+                    if (currentFilter === 'High Score (>0.8)') return (i.score || 0) > 0.8;
+                    if (currentFilter === 'Hidden') return i.method && i.method.includes('HIDDEN');
+                    return true;
+                });
+                renderResults(filteredItems);
 
-                scanHistory.unshift({ url, mode: currentMode, timestamp: Date.now(), count });
+                scanHistory.unshift({ url, mode: currentMode, timestamp: Date.now(), count, proxy: useProxy });
                 if (scanHistory.length > maxHistory) scanHistory = scanHistory.slice(0, maxHistory);
                 localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
-                localStorage.setItem('lastResults', JSON.stringify(items));
+                localStorage.setItem('lastResults', JSON.stringify(lastItems));
                 renderHistory();
 
                 statsSection.classList.remove('hidden');
@@ -558,6 +592,7 @@
                 loadingSkeletons.classList.add('hidden');
                 showToast(`Error: ${error.message}`, 'error');
                 noResults.classList.remove('hidden');
+                console.error(error);
             }
         }
 
@@ -568,18 +603,18 @@
             }
             resultsGrid.innerHTML = items.map(item => `
                 <div class="card-hover glass rounded-lg p-4 border border-white/10 relative">
-                    <div class="absolute top-2 right-2 text-xs px-2 py-1 rounded-full bg-${item.method === 'POST' ? 'red' : 'green'}-900/20 text-${item.method === 'POST' ? 'red' : 'green'}-400">${item.method}</div>
+                    <div class="absolute top-2 right-2 text-xs px-2 py-1 rounded-full bg-${item.method === 'POST' ? 'red' : 'green'}-900/20 text-${item.method === 'POST' ? 'red' : 'green'}-400">${item.method || 'N/A'}</div>
                     <h3 class="font-semibold text-sm mb-2 flex items-center justify-between">
-                        <span class="line-clamp-2">${item.url}</span>
-                        <span class="text-xs text-green-400 font-bold">${(item.score * 100).toFixed(0)}%</span>
+                        <span class="line-clamp-2">${item.title || item.url || item.href || 'N/A'}</span>
+                        <span class="text-xs text-green-400 font-bold">${((item.score || 0) * 100).toFixed(0)}%</span>
                     </h3>
-                    <p class="text-xs text-gray-400 mb-3 line-clamp-2">${item.context}</p>
+                    <p class="text-xs text-gray-400 mb-3 line-clamp-2">${item.context || item.source || 'N/A'}</p>
                     <div class="flex space-x-1">
-                        <input class="flex-1 p-2 text-xs bg-black/20 rounded-lg border border-white/10 font-mono" value="${item.url}" readonly>
-                        <button onclick="copyToClipboard('${item.url}')" class="p-2 text-blue-400 hover:text-blue-300 rounded-lg btn-smooth">
+                        <input class="flex-1 p-2 text-xs bg-black/20 rounded-lg border border-white/10 font-mono" value="${item.url || item.href || ''}" readonly>
+                        <button onclick="copyToClipboard('${item.url || item.href || ''}')" class="p-2 text-blue-400 hover:text-blue-300 rounded-lg btn-smooth">
                             <iconify-icon icon="mdi:content-copy" class="w-4 h-4"></iconify-icon>
                         </button>
-                        <a href="${item.url}" target="_blank" class="p-2 text-green-400 hover:text-green-300 rounded-lg btn-smooth">
+                        <a href="${item.url || item.href || '#'}" target="_blank" class="p-2 text-green-400 hover:text-green-300 rounded-lg btn-smooth">
                             <iconify-icon icon="mdi:open-in-new" class="w-4 h-4"></iconify-icon>
                         </a>
                     </div>
@@ -601,13 +636,36 @@
         function exportData(type) {
             const items = JSON.parse(localStorage.getItem('lastResults') || '[]');
             if (items.length === 0) return showToast('No data.', 'error');
-            // Mock export
+            if (type === 'json') {
+                const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+                downloadBlob(blob, `xetchers-v4-${currentMode}-${Date.now()}.json`);
+            } else if (type === 'csv') {
+                let csv = 'Method,URL,Context,Score\n';
+                items.forEach(item => csv += `"${item.method || ''}","${item.url || item.href || ''}","${item.context || item.source || ''}","${((item.score || 0)).toFixed(2)}"\n`);
+                const blob = new Blob([csv], { type: 'text/csv' });
+                downloadBlob(blob, `xetchers-v4-${currentMode}-${Date.now()}.csv`);
+            } else if (type === 'pdf') {
+                // Backend call for PDF
+                fetch('/api/fetch', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: 'pdf', mode: 'export' }) 
+                }).then(r => r.blob()).then(blob => downloadBlob(blob, 'results.pdf')).catch(() => showToast('PDF export failed.', 'error'));
+            }
             showToast(`${type.toUpperCase()} exported.`);
         }
 
+        function downloadBlob(blob, filename) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
         function shareResults() {
-            const shareUrl = window.location.href;
-            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied.'));
+            const shareUrl = `${window.location.origin}${window.location.hash}?url=${encodeURIComponent(urlInput.value)}&mode=${currentMode}`;
+            navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied.'));
         }
 
         // Events
@@ -628,6 +686,7 @@
         const params = new URLSearchParams(window.location.search);
         if (params.get('url')) {
             urlInput.value = params.get('url');
+            if (params.get('mode')) document.querySelector(`[data-mode="${params.get('mode')}"]`).click();
             setTimeout(analyze, 500);
         }
         renderHistory(true);

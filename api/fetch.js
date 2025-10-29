@@ -473,7 +473,7 @@ module.exports = async (req, res) => {
             } else {
                 const { allResources, pageInfo } = await fullNetworkScan(norm, proxy, mode);
                 clearTimeout(timeoutId);
-                // Filter by mode
+                // Filter by mode - Updated with all new categories
                 let filtered = allResources;
                 switch (mode) {
                     case 'fetch': filtered = filtered.filter(r => r.type === 'Fetch'); break;
@@ -485,11 +485,21 @@ module.exports = async (req, res) => {
                     case 'sitemap': filtered = filtered.filter(r => r.category === 'Sitemap'); break;
                     case 'robots': filtered = filtered.filter(r => r.category === 'Robots.txt'); break;
                     case 'scripts': filtered = filtered.filter(r => r.category === 'JS/Scripts'); break;
+                    case 'doc': filtered = filtered.filter(r => r.category === 'Doc'); break;
+                    case 'css': filtered = filtered.filter(r => r.category === 'CSS'); break;
+                    case 'js': filtered = filtered.filter(r => r.category === 'JS/Scripts'); break; // Alias for Scripts
+                    case 'font': filtered = filtered.filter(r => r.category === 'Font'); break;
+                    case 'img': filtered = filtered.filter(r => r.category === 'Img'); break;
+                    case 'media': filtered = filtered.filter(r => r.category === 'Media'); break;
+                    case 'manifest': filtered = filtered.filter(r => r.category === 'Manifest'); break;
+                    case 'wasm': filtered = filtered.filter(r => r.category === 'Wasm'); break;
+                    case 'options': filtered = filtered.filter(r => r.category === 'Options'); break;
                     case 'all-endpoints':
                         filtered = filtered.filter(r => ['XHR', 'Fetch'].includes(r.type) || r.url.includes('api') || r.url.includes('/v'));
                         break;
                     case 'browser': // Full modern scan
                     case 'full':
+                    case 'all':
                         // All categories
                         break;
                     default:

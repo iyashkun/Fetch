@@ -22,9 +22,42 @@ module.exports = async (req, res) => {
     const norm = normalizeUrl(url);
     if (!norm) return res.status(400).json({ error: 'Invalid URL.' });
 
-    console.log(`v4 Scan: Mode ${mode} on ${norm} (Proxy: ${proxy ? 'Yes' : 'No'}) at ${new Date().toISOString()}`);
+    console.log(`v5 Scan: Mode ${mode} on ${norm} (Proxy: ${proxy ? 'Yes' : 'No'}) at ${new Date().toISOString()}`);
 
-    // extractPosts (full implementation)
+    // Classify resource (ported from browser JS)
+    function classifyResource(entry) {
+        const { url = '', resourceType = '', method = 'GET', mime = '' } = entry;
+        if (method === 'OPTIONS') return 'Options';
+        if (resourceType === 'XHR' || resourceType === 'Fetch') {
+            if (url.match(/api/i) && !url.match(/\.(css|js|png|jpg|gif|woff|ttf|mp4|mp3|wasm|xml|txt|json)$/i)) return 'Hidden APIs';
+            return resourceType;
+        }
+        if (resourceType === 'Document') return 'Doc';
+        if (resourceType === 'Stylesheet') return 'CSS';
+        if (resourceType === 'Script') return 'JS/Scripts';
+        if (resourceType === 'Image') return 'Img';
+        if (resourceType === 'Media') return 'Media';
+        if (resourceType === 'Font') return 'Font';
+        if (resourceType === 'WebSocket') return 'Socket';
+        if (url.endsWith('.wasm')) return 'Wasm';
+        if (url.includes('/sitemap.xml')) return 'Sitemap';
+        if (url.includes('/robots.txt')) return 'Robots.txt';
+        if (url.includes('/manifest.json')) return 'Manifest';
+        return 'Other';
+    }
+
+    // Score calculator
+    function calculateScore(item) {
+        const { category, url, method } = item;
+        let score = 0.5;
+        if (['XHR', 'Fetch', 'Hidden APIs'].includes(category)) score += 0.3;
+        if (url.includes('/api/') || url.includes('/v') || url.includes('/graphql')) score += 0.2;
+        if (method === 'POST' || method === 'PUT' || method === 'DELETE') score += 0.1;
+        if (['Sitemap', 'Manifest', 'Robots.txt'].includes(category)) score = 0.9;
+        return Math.min(score, 1.0);
+    }
+
+    // extractPosts (unchanged, static)
     async function extractPosts(html, baseUrl) {
         console.log('Extracting posts...');
         const $ = cheerio.load(html);
@@ -135,78 +168,134 @@ module.exports = async (req, res) => {
         return Array.from(results.values()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 200);
     }
 
-    // Puppeteer Setup
-    async function launchBrowser(proxyUrl) {
+    // Puppeteer Setup (updated for proxy)
+    async function launchBrowser(proxyStr) {
+        let proxyArgs = [];
+        if (proxyStr) {
+            const proxyServer = proxyStr.startsWith('http') ? proxyStr : `http://${proxyStr}`;
+            proxyArgs = [`--proxy-server=${proxyServer}`];
+        }
         const browser = await puppeteer.launch({
-            args: chromium.args,
+            args: [...chromium.args, ...proxyArgs],
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
-            headless: true,
-            ...(proxyUrl ? { args: [`--proxy-server=${proxyUrl}`] } : {})
+            headless: true
         });
         return browser;
     }
 
-    // Dynamic Extraction
-    async function extractWithPuppeteer(baseUrl, mode, proxyUrl) {
-        const browser = await launchBrowser(proxyUrl);
+    // Full Network Scan (integrated browser JS logic + modern Puppeteer)
+    async function fullNetworkScan(baseUrl, proxyStr, mode) {
+        const browser = await launchBrowser(proxyStr);
         const page = await browser.newPage();
-        if (proxyUrl) await page.authenticate({ username: 'user', password: 'pass' });  // Mock
+        const allResources = [];
+        const perfEntries = [];
 
-        const networkRequests = [];
-        page.on('request', req => {
-            if (req.url().includes('api') || req.url().includes('graphql') || req.method() === 'POST') {
-                networkRequests.push({
-                    url: req.url(),
-                    method: req.method(),
-                    score: req.url().includes('/v') ? 0.9 : 0.7
-                });
+        // Handle proxy auth if format user:pass@host:port
+        if (proxyStr && proxyStr.includes('@')) {
+            const [, authHost] = proxyStr.split('@');
+            const [user, pass] = authHost.split(':').slice(0, 2); // simplistic
+            if (user && pass) {
+                await page.authenticate({ username: user, password: pass });
             }
+        }
+
+        // Response listener for full details
+        page.on('response', async (response) => {
+            const request = response.request();
+            const url = response.url();
+            const method = request.method();
+            const resourceType = request.resourceType();
+            const reqHeaders = request.headers();
+            const respHeaders = await response.headers();
+            const contentType = respHeaders['content-type'] || '';
+            const status = response.status();
+            const size = parseInt(respHeaders['content-length'] || '0');
+
+            const category = classifyResource({ url, resourceType, method, mime: contentType });
+
+            allResources.push({
+                category,
+                url,
+                method,
+                status,
+                reqHeaders,
+                respHeaders,
+                size,
+                type: resourceType,
+                source: 'dynamic'
+            });
         });
 
+        // WebSocket listener
+        page.on('websocket', (ws) => {
+            allResources.push({
+                category: 'Socket',
+                url: ws.url(),
+                method: 'WS',
+                status: 'connected',
+                reqHeaders: {},
+                respHeaders: {},
+                size: 0,
+                type: 'WebSocket',
+                source: 'dynamic'
+            });
+        });
+
+        // Goto and wait
         await page.goto(baseUrl, { waitUntil: 'networkidle0', timeout: 15000 });
-        await page.waitForTimeout(3000);  // Dynamic wait
+        await page.waitForTimeout(3000);
 
-        const dynamicData = await page.evaluate(() => {
-            return window.performance.getEntriesByType('resource').filter(r => r.initiatorType === 'fetch' || r.initiatorType === 'xmlhttprequest');
+        // Perf entries for duration etc.
+        const perf = await page.evaluate(() => {
+            const entries = performance.getEntriesByType('resource');
+            return entries.map(e => ({
+                name: e.name,
+                initiatorType: e.initiatorType,
+                duration: e.duration,
+                transferSize: e.transferSize
+            }));
         });
+        perfEntries.push(...perf);
 
-        await browser.close();
-
-        return [...networkRequests, ...dynamicData.map(d => ({ url: d.name, method: 'DYNAMIC', score: 0.85 }))].slice(0, 50);
-    }
-
-    // extractNetworkCalls (full, with all features)
-    async function extractNetworkCalls(html, baseUrl, mode) {
-        const $ = cheerio.load(html);
-        const results = new Set();
-
-        // JS Collection (staggered)
-        const jsCodes = [];
-        $('script:not([src])').each((i, script) => {
-            const code = $(script).html() || '';
-            if (code.trim()) jsCodes.push(code);
-        });
-        const jsUrls = [];
-        $('script[src]').each((i, script) => {
-            const src = $(script).attr('src');
-            if (src && jsUrls.length < 10) {
-                try {
-                    jsUrls.push(new URL(src, baseUrl).href);
-                } catch {}
+        // Match perf to resources
+        allResources.forEach(res => {
+            const p = perfEntries.find(p => p.name === res.url);
+            if (p) {
+                res.duration = p.duration;
+                res.transferSize = p.transferSize;
+                res.initiatorType = p.initiatorType;
             }
         });
 
+        // JS extraction for static analysis
+        const jsUrls = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('script[src]')).map(s => {
+                const src = s.getAttribute('src');
+                try {
+                    return new URL(src, location.origin).href;
+                } catch {
+                    return src;
+                }
+            }).slice(0, 10);
+        });
+
+        // Fetch and regex JS (staggered, modern async)
+        const staticCalls = [];
         const concurrency = 3;
         for (let i = 0; i < jsUrls.length; i += concurrency) {
             const batch = jsUrls.slice(i, i + concurrency);
-            const batchPromises = batch.map(async (jsUrl, batchIndex) => {
+            const batchPromises = batch.map(async (jsUrl, idx) => {
+                await new Promise(r => setTimeout(r, idx * 500)); // stagger
                 try {
-                    await new Promise(resolve => setTimeout(resolve, batchIndex * 500));
+                    const proxyObj = proxyStr ? {
+                        host: proxyStr.split(':')[0],
+                        port: parseInt(proxyStr.split(':')[1] || 8080)
+                    } : false;
                     const response = await axios.get(jsUrl, {
-                        headers: { 'User-Agent': 'ProNetAnalyzer/4.0' },
+                        headers: { 'User-Agent': 'ProNetAnalyzer/5.0' },
                         timeout: 4000,
-                        proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false
+                        proxy: proxyObj
                     });
                     return response.data;
                 } catch (e) {
@@ -214,185 +303,211 @@ module.exports = async (req, res) => {
                 }
             });
             const batchCodes = await Promise.all(batchPromises);
-            batchCodes.forEach(code => { if (code.trim()) jsCodes.push(code); });
-        }
-
-        const commonCapture = '["\']([^"\',\\s]+)["\']';
-
-        function getPatternsForMode(m) {
+            // Regex patterns (modern RegExp with flags)
+            const commonCapture = '["\']([^"\',\\s]+)["\']';
             const patterns = [
-                { regexStr: `axios\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['post', 'all-endpoints', 'hidden', 'graphql'] },
-                { regexStr: `axios\\.get\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET', modeMatch: ['all-endpoints'] },
-                { regexStr: `\\$\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['post', 'all-endpoints', 'hidden'] },
-                { regexStr: `\\$\\.get\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET', modeMatch: ['all-endpoints'] },
-                { regexStr: `fetch\\s*\\(\\s*${commonCapture}.*?method\\s*[:=]\\s*["\']?([A-Z]+)["\']?`, flags: 'gi', group: 1, method: '$1', modeMatch: ['fetch', 'post', 'all-endpoints', 'hidden', 'graphql'] },
-                { regexStr: `fetch\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET', modeMatch: ['fetch', 'all-endpoints'] },
-                { regexStr: `open\\s*\\(\\s*["\']?([A-Z]+)["\']?\\s*,\\s*${commonCapture}`, flags: 'gi', group: 2, method: '$1', modeMatch: ['xhr', 'all-endpoints', 'hidden'] },
-                { regexStr: `send\\s*\\(\\s*(?:null|\\{[^}]+\\})?\\)`, flags: 'gi', group: 0, method: 'POST', modeMatch: ['xhr', 'post'] }
+                { regexStr: `axios\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST' },
+                { regexStr: `axios\\.get\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET' },
+                { regexStr: `\\$\\.post\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST' },
+                { regexStr: `\\$\\.get\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET' },
+                { regexStr: `fetch\\s*\\(\\s*${commonCapture}.*?method\\s*[:=]\\s*["\']?([A-Z]+)["\']?`, flags: 'gi', group: 1, method: '$1' },
+                { regexStr: `fetch\\s*\\(\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'GET' },
+                { regexStr: `open\\s*\\(\\s*["\']?([A-Z]+)["\']?\\s*,\\s*${commonCapture}`, flags: 'gi', group: 2, method: '$1' },
+                ...(mode === 'graphql' ? [
+                    { regexStr: `/graphql\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST' },
+                    { regexStr: `(query|mutation)\\s*{[^}]+}`, flags: 'gi', group: 0, method: 'GRAPHQL' }
+                ] : []),
+                ...(mode === 'ws' ? [
+                    { regexStr: `(ws|wss):/{2}[^"\',\\s]+`, flags: 'gi', group: 0, method: 'WS' }
+                ] : [])
             ];
-
-            if (m === 'graphql') {
-                patterns.push(
-                    { regexStr: `/graphql\\s*${commonCapture}`, flags: 'gi', group: 1, method: 'POST', modeMatch: ['graphql'] },
-                    { regexStr: `(query|mutation)\\s*{[^}]+}`, flags: 'gi', group: 0, method: 'GRAPHQL', modeMatch: ['graphql'] }
-                );
-            }
-
-            if (m === 'ws') {
-                patterns.push(
-                    { regexStr: `(ws|wss):/{2}[^"\',\\s]+`, flags: 'gi', group: 0, method: 'WS', modeMatch: ['ws'] }
-                );
-            }
-
-            return patterns.filter(p => p.modeMatch.includes(m));
-        }
-
-        let patterns = getPatternsForMode(mode);
-
-        // Apply patterns
-        patterns.forEach(({ regexStr, flags, group, method }) => {
-            const regex = new RegExp(regexStr, flags);
-            jsCodes.forEach(code => {
-                let match;
-                while ((match = regex.exec(code)) !== null) {
-                    let endpoint = match[group] || match[0];
-                    let meth = method;
-                    if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
-                    if (endpoint) {
-                        try {
-                            if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
-                            const context = code.substring(Math.max(0, match.index - 50), match.index + 150).trim();
-                            const item = { url: endpoint, method: meth, context, score: 0.7 + (endpoint.includes('/api/') || endpoint.includes('/v') ? 0.3 : 0) };
-                            results.add(JSON.stringify(item));
-                        } catch (e) {}
+            batchCodes.forEach(code => {
+                if (!code.trim()) return;
+                patterns.forEach(({ regexStr, flags, group, method }) => {
+                    const regex = new RegExp(regexStr, flags);
+                    let match;
+                    while ((match = regex.exec(code)) !== null) {
+                        let endpoint = match[group] || match[0];
+                        let meth = method;
+                        if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
+                        if (endpoint) {
+                            try {
+                                if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
+                                const context = code.substring(Math.max(0, match.index - 50), match.index + 150).trim();
+                                const item = {
+                                    url: endpoint,
+                                    method: meth,
+                                    context,
+                                    category: classifyResource({ url: endpoint, method: meth, resourceType: 'XHR' }),
+                                    status: 'static',
+                                    reqHeaders: {},
+                                    respHeaders: {},
+                                    size: 0,
+                                    type: 'XHR',
+                                    source: 'static-js'
+                                };
+                                staticCalls.push(item);
+                                regex.lastIndex = match.index + 1;
+                            } catch (e) {}
+                        }
                     }
-                    regex.lastIndex = match.index + 1;
+                });
+                // Beautify for hidden mode
+                if (mode === 'hidden') {
+                    try {
+                        const beautified = beautify(code, { indent_size: 2 });
+                        // Re-apply patterns on beautified
+                        patterns.forEach(({ regexStr, flags, group, method }) => {
+                            const regex = new RegExp(regexStr, flags);
+                            let match;
+                            while ((match = regex.exec(beautified)) !== null) {
+                                // Similar logic as above, add with higher score
+                                let endpoint = match[group] || match[0];
+                                let meth = method;
+                                if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
+                                if (endpoint && !staticCalls.some(s => s.url === endpoint)) {
+                                    try {
+                                        if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
+                                        const context = beautified.substring(Math.max(0, match.index - 50), match.index + 150).trim();
+                                        staticCalls.push({
+                                            url: endpoint,
+                                            method: meth,
+                                            context,
+                                            category: classifyResource({ url: endpoint, method: meth, resourceType: 'XHR' }),
+                                            status: 'static-beautified',
+                                            reqHeaders: {},
+                                            respHeaders: {},
+                                            size: 0,
+                                            type: 'XHR',
+                                            source: 'static-js-beautified'
+                                        });
+                                    } catch (e) {}
+                                }
+                                regex.lastIndex = match.index + 1;
+                            }
+                        });
+                    } catch (e) {
+                        console.log('Beautify error:', e.message);
+                    }
                 }
             });
+        }
+
+        // Special files (always fetch server-side)
+        const special = [
+            { path: '/sitemap.xml', cat: 'Sitemap' },
+            { path: '/robots.txt', cat: 'Robots.txt' },
+            { path: '/manifest.json', cat: 'Manifest' }
+        ];
+        const proxyObj = proxyStr ? {
+            host: proxyStr.split(':')[0],
+            port: parseInt(proxyStr.split(':')[1] || 8080)
+        } : false;
+        for (const sp of special) {
+            try {
+                const spUrl = new URL(sp.path, baseUrl).href;
+                const resp = await axios.get(spUrl, { timeout: 5000, proxy: proxyObj });
+                allResources.push({
+                    category: sp.cat,
+                    url: spUrl,
+                    method: 'GET',
+                    status: resp.status,
+                    reqHeaders: {},
+                    respHeaders: resp.headers,
+                    size: parseInt(resp.headers['content-length'] || '0'),
+                    type: 'fetch',
+                    source: 'special'
+                });
+            } catch (e) {
+                console.log(`Special fetch error ${sp.path}:`, e.message);
+            }
+        }
+
+        // Page info
+        const pageInfo = await page.evaluate(() => {
+            const nav = performance.getEntriesByType('navigation')[0] || {};
+            return {
+                title: document.title,
+                status: nav.responseStatus || 200,
+                loadTime: performance.timing ? performance.timing.loadEventEnd - performance.timing.navigationStart : 0,
+                memoryUsage: performance.memory ? {
+                    usedJSHeapSize: performance.memory.usedJSHeapSize,
+                    totalJSHeapSize: performance.memory.totalJSHeapSize,
+                    jsHeapSizeLimit: performance.memory.jsHeapSizeLimit
+                } : null
+            };
         });
 
-        // Puppeteer for dynamic
-        if (['hidden', 'graphql', 'ws'].includes(mode)) {
-            const dynamic = await extractWithPuppeteer(baseUrl, mode, proxy);
-            dynamic.forEach(item => results.add(JSON.stringify(item)));
-        }
+        await browser.close();
 
-        // Sitemap
-        if (mode === 'sitemap') {
-            try {
-                const sitemapUrl = new URL('/sitemap.xml', baseUrl).href;
-                const sitemapResp = await axios.get(sitemapUrl, { timeout: 5000, proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false });
-                const sitemap$ = cheerio.load(sitemapResp.data);
-                sitemap$('loc').each((i, el) => {
-                    const loc = sitemap$(el).text().trim();
-                    if (loc) results.add(JSON.stringify({ url: loc, method: 'SITEMAP', context: 'Sitemap', score: 0.9 }));
-                });
-            } catch (e) {
-                console.log('Sitemap error:', e.message);
-            }
-        }
-
-        // Robots
-        if (mode === 'robots') {
-            try {
-                const robotsUrl = new URL('/robots.txt', baseUrl).href;
-                const robotsResp = await axios.get(robotsUrl, { timeout: 5000, proxy: proxy ? { host: proxy.split(':')[0], port: parseInt(proxy.split(':')[1]) } : false });
-                const lines = robotsResp.data.split('\n');
-                lines.forEach(line => {
-                    if (line.startsWith('Disallow:') && line.includes('/api/')) {
-                        const path = line.split(':')[1].trim();
-                        results.add(JSON.stringify({ url: new URL(path, baseUrl).href, method: 'ROBOTS-HIDDEN', context: 'Disallowed', score: 0.95 }));
-                    }
-                });
-            } catch (e) {
-                console.log('Robots error:', e.message);
-            }
-        }
-
-        // Hidden extras (beautify)
-        if (mode === 'hidden') {
-            jsCodes.forEach(code => {
-                try {
-                    const beautified = beautify(code, { indent_size: 2 });
-                    patterns.forEach(({ regexStr, flags, group, method }) => {
-                        const regex = new RegExp(regexStr, flags);
-                        let match;
-                        while ((match = regex.exec(beautified)) !== null) {
-                            let endpoint = match[group] || match[0];
-                            let meth = method;
-                            if (method === '$1') meth = (match[1] || 'GET').toUpperCase();
-                            if (endpoint) {
-                                try {
-                                    if (!endpoint.startsWith('http')) endpoint = new URL(endpoint, baseUrl).href;
-                                    const context = beautified.substring(Math.max(0, match.index - 50), match.index + 150).trim();
-                                    const item = { url: endpoint, method: meth, context, score: 0.8 + (endpoint.includes('/internal') ? 0.2 : 0) };
-                                    results.add(JSON.stringify(item));
-                                } catch (e) {}
-                            }
-                            regex.lastIndex = match.index + 1;
-                        }
-                    });
-                } catch (e) {
-                    console.log('Beautify error:', e.message);
-                }
-            });
-        }
-
-        // Scripts
-        if (mode === 'scripts') {
-            $('script[src]').each((i, script) => {
-                const src = $(script).attr('src');
-                if (src) {
-                    try {
-                        const fullSrc = new URL(src, baseUrl).href;
-                        results.add(JSON.stringify({ url: fullSrc, method: 'SCRIPT', context: 'External', score: 0.5 }));
-                    } catch {}
-                }
-            });
-        }
-
-        return Array.from(results).map(s => {
-            try { return JSON.parse(s); } catch { return null; }
-        }).filter(Boolean).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 150);
+        // Combine
+        allResources.push(...staticCalls);
+        return { allResources, pageInfo };
     }
 
-    // Main with retry
+    // Main with retry (modern AbortController)
     async function attemptScan(attempt = 1) {
         try {
             const controller = new AbortController();
-            setTimeout(() => controller.abort(), 30000);
-            const resp = await fetch(norm, {
-                signal: controller.signal,
-                redirect: 'follow',
-                headers: {
-                    'User-Agent': 'ProNetAnalyzer/4.0 (Study Project)',
-                    'Accept': 'text/html,*/*;q=0.9'
-                }
-            });
-
-            if (!resp.ok && attempt < 3) {
-                console.log(`Retry ${attempt}/3 for ${resp.status}`);
-                return attemptScan(attempt + 1);
-            }
-
-            if (!resp.ok) return res.status(502).json({ error: `HTTP ${resp.status}. Retries exhausted.` });
-
-            const html = await resp.text();
+            const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased for Puppeteer
             const data = { url: norm };
 
             if (mode === 'posts') {
+                const resp = await fetch(norm, {
+                    signal: controller.signal,
+                    redirect: 'follow',
+                    headers: {
+                        'User-Agent': 'ProNetAnalyzer/5.0 (Study Project)',
+                        'Accept': 'text/html,*/*;q=0.9'
+                    }
+                });
+                clearTimeout(timeoutId);
+                if (!resp.ok && attempt < 3) {
+                    console.log(`Retry ${attempt}/3 for ${resp.status}`);
+                    return attemptScan(attempt + 1);
+                }
+                if (!resp.ok) return res.status(502).json({ error: `HTTP ${resp.status}. Retries exhausted.` });
+                const html = await resp.text();
                 data.items = await extractPosts(html, norm);
                 data.found = data.items.length;
             } else {
-                data.items = await extractNetworkCalls(html, norm, mode);
+                const { allResources, pageInfo } = await fullNetworkScan(norm, proxy, mode);
+                clearTimeout(timeoutId);
+                // Filter by mode
+                let filtered = allResources;
+                switch (mode) {
+                    case 'fetch': filtered = filtered.filter(r => r.type === 'Fetch'); break;
+                    case 'xhr': filtered = filtered.filter(r => r.type === 'XHR'); break;
+                    case 'post': filtered = filtered.filter(r => r.method === 'POST'); break;
+                    case 'hidden': filtered = filtered.filter(r => r.category === 'Hidden APIs'); break;
+                    case 'graphql': filtered = filtered.filter(r => r.url.includes('graphql')); break;
+                    case 'ws': filtered = filtered.filter(r => r.category === 'Socket'); break;
+                    case 'sitemap': filtered = filtered.filter(r => r.category === 'Sitemap'); break;
+                    case 'robots': filtered = filtered.filter(r => r.category === 'Robots.txt'); break;
+                    case 'scripts': filtered = filtered.filter(r => r.category === 'JS/Scripts'); break;
+                    case 'all-endpoints':
+                        filtered = filtered.filter(r => ['XHR', 'Fetch'].includes(r.type) || r.url.includes('api') || r.url.includes('/v'));
+                        break;
+                    case 'browser': // Full modern scan
+                    case 'full':
+                        // All categories
+                        break;
+                    default:
+                        filtered = filtered.filter(r => ['XHR', 'Fetch', 'Hidden APIs', 'Socket'].includes(r.category));
+                }
+                data.items = filtered.map(item => ({ ...item, score: calculateScore(item) }))
+                    .sort((a, b) => (b.score || 0) - (a.score || 0))
+                    .slice(0, 200);
                 data.count = data.items.length;
+                data.pageInfo = pageInfo;
             }
 
             res.json(data);
         } catch (err) {
+            clearTimeout(timeoutId);
             if (attempt < 3) return attemptScan(attempt + 1);
-            console.error(`v4 Error ${mode} ${norm}:`, err.message);
-            res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Extreme scan failed after retries.', details: err.message });
+            console.error(`v5 Error ${mode} ${norm}:`, err.message);
+            res.status(err.name === 'AbortError' ? 408 : 500).json({ error: 'Scan failed after retries.', details: err.message });
         }
     }
 

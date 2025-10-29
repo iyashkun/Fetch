@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>xetchers v5.0 - API Intelligence</title>
+    <title>xetchers v5.1 - API Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -22,9 +22,38 @@
                         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
                     },
                     animation: {
-                        'fade-in': 'fadeIn 0.5s ease-in-out',
-                        'slide-up': 'slideUp 0.3s ease-out',
-                        'pulse-glow': 'pulseGlow 2s infinite'
+                        'fade-in': 'fadeIn 0.6s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                        'pulse-glow': 'pulseGlow 2s infinite',
+                        'progress-fill': 'progressFill 2s ease-out',
+                        'bounce-subtle': 'bounceSubtle 0.5s ease-in-out',
+                        'scale-in': 'scaleIn 0.3s ease-out'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(30px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.5)' },
+                            '50%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' }
+                        },
+                        progressFill: {
+                            '0%': { width: '0%' },
+                            '100%': { width: 'var(--progress-width, 0%)' }
+                        },
+                        bounceSubtle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-2px)' }
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
                     }
                 } 
             }
@@ -37,31 +66,31 @@
     <style>
         .glass { backdrop-filter: blur(20px); background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); }
         .gradient-hero { background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #2a2a2a 100%); }
-        .btn-smooth { transition: all 0.2s ease; }
-        .btn-smooth:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        .skeleton-shimmer { background: linear-gradient(90deg, #1a1a1a 25%, #0f0f0f 50%, #1a1a1a 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+        .gradient-card { background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.3) 100%); }
+        .btn-smooth { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-smooth:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+        .skeleton-shimmer { background: linear-gradient(90deg, #1a1a1a 25%, #0f0f0f 50%, #1a1a1a 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); } 50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); } }
-        .sidebar-slide { transition: transform 0.3s ease; }
+        .sidebar-slide { transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
         .sidebar-slide.mobile-open { transform: translateX(0); }
         .mobile-overlay { background: rgba(0,0,0,0.8); transition: opacity 0.3s; }
         .pie-chart-container { position: relative; width: 120px; height: 120px; margin: 0 auto; animation: pulseGlow 2s infinite; }
         .pie-chart { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; }
         .pie-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: #0a0a0a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; color: white; }
-        .toast { position: fixed; top: 100px; right: 20px; z-index: 9999; transform: translateX(100%); transition: transform 0.3s ease; max-width: 400px; animation: slideUp 0.3s ease-out; }
+        .toast { position: fixed; top: 100px; right: 20px; z-index: 9999; transform: translateX(100%); transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); max-width: 400px; animation: slideUp 0.3s ease-out; }
         .toast.show { transform: translateX(0); }
-        .card-hover { transition: all 0.3s ease; transform: translateY(0); }
-        .card-hover:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.5); transform: translateY(-5px); }
+        .card-hover { transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); transform: translateY(0); }
+        .card-hover:hover { box-shadow: 0 20px 50px rgba(0,0,0,0.5); transform: translateY(-8px) scale(1.02); }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .dropdown { position: relative; }
         .dropdown-toggle { cursor: pointer; }
-        .dropdown-menu { position: absolute; top: 100%; left: 0; right: 0; background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.2s ease; z-index: 10; }
+        .dropdown-menu { position: absolute; top: 100%; left: 0; right: 0; background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); z-index: 10; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
         .dropdown.open .dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
-        .dropdown-item { padding: 0.75rem 1rem; cursor: pointer; transition: background 0.2s ease; }
-        .dropdown-item:hover { background: rgba(255,255,255,0.05); }
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        .dropdown-item { padding: 0.75rem 1rem; cursor: pointer; transition: all 0.2s ease; border-radius: 0.5rem; }
+        .dropdown-item:hover { background: rgba(255,255,255,0.05); transform: translateX(4px); }
+        .fade-in { animation: fadeIn 0.6s ease-out; }
+        .progress-bar { background: rgba(255,255,255,0.1); border-radius: 9999px; overflow: hidden; }
+        .progress-fill { height: 4px; background: linear-gradient(90deg, #3b82f6, #10b981, #f59e0b); border-radius: 9999px; transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); animation: progressFill 2s ease-out; }
         @media (max-width: 768px) { 
             .sidebar-slide { transform: translateX(-100%); } 
             .sidebar-slide.mobile-open { transform: translateX(0); } 
@@ -72,34 +101,38 @@
         .method-post { @apply bg-red-900/20 text-red-400 border-red-800/30; }
         .method-get { @apply bg-green-900/20 text-green-400 border-green-800/30; }
         .method-other { @apply bg-gray-900/20 text-gray-400 border-gray-800/30; }
+        .mode-btn { position: relative; overflow: hidden; }
+        .mode-btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transition: left 0.5s; }
+        .mode-btn:hover::before { left: 100%; }
+        .stagger-item { animation: scaleIn 0.4s ease-out forwards; opacity: 0; }
     </style>
 </head>
 <body class="bg-black text-white min-h-screen font-sans antialiased">
     <!-- Global Nav -->
-    <nav class="gradient-hero shadow-xl fixed w-full z-50 top-0">
+    <nav class="gradient-hero shadow-2xl fixed w-full z-50 top-0">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <iconify-icon icon="mdi:api" class="text-xl text-primary-500"></iconify-icon>
+                <iconify-icon icon="mdi:api" class="text-2xl text-primary-500 animate-pulse-glow"></iconify-icon>
                 <div>
-                    <h1 class="text-lg font-bold text-white leading-tight">xetchers</h1>
-                    <span class="text-white/60 text-xs font-medium">v5.0 | API Intelligence</span>
+                    <h1 class="text-xl font-bold text-white leading-tight">xetchers</h1>
+                    <span class="text-white/70 text-sm font-medium">v5.1 | Next-Gen API Intelligence</span>
                 </div>
             </div>
             <div class="flex items-center space-x-2">
                 <div class="dropdown">
-                    <div class="dropdown-toggle px-3 py-1.5 rounded-md bg-black/20 text-white text-sm font-medium border border-white/10 focus:border-primary-300 focus:outline-none btn-smooth">
+                    <div class="dropdown-toggle px-4 py-2 rounded-lg bg-black/20 text-white text-sm font-medium border border-white/10 focus:border-primary-300 focus:outline-none btn-smooth">
                         English <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
                     </div>
-                    <div class="dropdown-menu mt-1">
+                    <div class="dropdown-menu mt-2">
                         <div class="dropdown-item text-sm" data-lang="en">English</div>
                         <div class="dropdown-item text-sm" data-lang="hi">Hindi</div>
                     </div>
                 </div>
-                <button id="themeToggle" class="p-2 rounded-md bg-black/20 hover:bg-white/10 text-white btn-smooth">
-                    <iconify-icon icon="mdi:weather-night" class="text-sm"></iconify-icon>
+                <button id="themeToggle" class="p-3 rounded-lg bg-black/20 hover:bg-white/10 text-white btn-smooth">
+                    <iconify-icon icon="mdi:weather-night" class="text-lg"></iconify-icon>
                 </button>
-                <button id="mobileMenuToggle" class="md:hidden p-2 rounded-md bg-black/20 hover:bg-white/10 text-white btn-smooth">
-                    <iconify-icon icon="mdi:menu" class="text-sm"></iconify-icon>
+                <button id="mobileMenuToggle" class="md:hidden p-3 rounded-lg bg-black/20 hover:bg-white/10 text-white btn-smooth">
+                    <iconify-icon icon="mdi:menu" class="text-lg"></iconify-icon>
                 </button>
             </div>
         </div>
@@ -110,251 +143,354 @@
 
     <div class="flex pt-16">
         <!-- Sidebar -->
-        <aside id="sidebar" class="sidebar-slide w-64 bg-surface-dark shadow-2xl h-[calc(100vh-4rem)] overflow-y-auto fixed md:relative z-40 inset-y-16 md:inset-y-0 left-0">
-            <div class="p-4">
-                <h2 class="text-base font-semibold mb-4 text-white flex items-center border-b border-white/10 pb-3">
-                    <iconify-icon icon="mdi:view-dashboard" class="mr-2 text-primary-400"></iconify-icon>Scan Modes
+        <aside id="sidebar" class="sidebar-slide w-72 bg-gradient-to-b from-surface-dark to-black/50 shadow-2xl h-[calc(100vh-4rem)] overflow-y-auto fixed md:relative z-40 inset-y-16 md:inset-y-0 left-0">
+            <div class="p-6">
+                <h2 class="text-lg font-bold mb-6 text-white flex items-center border-b border-white/10 pb-4">
+                    <iconify-icon icon="mdi:view-dashboard" class="mr-3 text-primary-400 w-5 h-5"></iconify-icon>Scan Modes
                 </h2>
-                <div class="space-y-1 mb-6">
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-primary-900/20 border border-primary-800/30 hover:border-primary-700/50 btn-smooth mode-btn active font-medium" data-mode="posts">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:newspaper" class="text-primary-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Posts & Articles</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md border border-white/10 hover:border-white/20 btn-smooth mode-btn font-medium" data-mode="all-endpoints">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:link-variant" class="text-secondary-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">All Endpoints</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md border border-white/10 hover:border-white/20 btn-smooth mode-btn font-medium" data-mode="fetch">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:download" class="text-indigo-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Fetch Calls</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md border border-white/10 hover:border-white/20 btn-smooth mode-btn font-medium" data-mode="post">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:upload" class="text-red-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">POST Only</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md border border-white/10 hover:border-white/20 btn-smooth mode-btn font-medium" data-mode="xhr">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:sync" class="text-accent-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">XHR/Send</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md border border-white/10 hover:border-white/20 btn-smooth mode-btn font-medium" data-mode="scripts">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:code-tags" class="text-purple-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Scripts</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-red-900/20 border border-red-800/30 hover:border-red-700/50 btn-smooth mode-btn font-medium" data-mode="hidden">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:eye-off" class="text-red-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Hidden APIs (Pro)</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-purple-900/20 border border-purple-800/30 hover:border-purple-700/50 btn-smooth mode-btn font-medium" data-mode="graphql">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:graphql" class="text-purple-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">GraphQL</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-secondary-900/20 border border-secondary-800/30 hover:border-secondary-700/50 btn-smooth mode-btn font-medium" data-mode="ws">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:message-text" class="text-secondary-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">WebSockets</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-accent-900/20 border border-accent-800/30 hover:border-accent-700/50 btn-smooth mode-btn font-medium" data-mode="sitemap">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:sitemap" class="text-accent-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Sitemap</span>
-                        </div>
-                    </button>
-                    <button class="w-full text-left px-3 py-2.5 rounded-md bg-gray-900/20 border border-gray-800/30 hover:border-gray-700/50 btn-smooth mode-btn font-medium" data-mode="robots">
-                        <div class="flex items-center">
-                            <iconify-icon icon="mdi:robot" class="text-gray-400 mr-2 w-4 h-4"></iconify-icon>
-                            <span class="text-sm">Robots.txt</span>
-                        </div>
-                    </button>
+                <div class="space-y-2 mb-6">
+                    <!-- Basic Modes -->
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">Basic</p>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-primary-900/30 border border-primary-800/40 hover:border-primary-700/60 btn-smooth mode-btn active font-medium stagger-item" data-mode="posts" style="animation-delay: 0s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:newspaper" class="text-primary-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Posts & Articles</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="all-endpoints" style="animation-delay: 0.1s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:link-variant" class="text-secondary-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">All Endpoints</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="full" style="animation-delay: 0.2s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:view-all" class="text-accent-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Full Scan</span>
+                            </div>
+                        </button>
+                    </div>
+                    <!-- Network Modes -->
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">Network</p>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="fetch" style="animation-delay: 0.3s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:download" class="text-indigo-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Fetch Calls</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="post" style="animation-delay: 0.4s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:upload" class="text-red-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">POST Only</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="xhr" style="animation-delay: 0.5s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:sync" class="text-accent-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">XHR/Send</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="options" style="animation-delay: 0.6s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:settings-outline" class="text-yellow-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Options</span>
+                            </div>
+                        </button>
+                    </div>
+                    <!-- Resources -->
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">Resources</p>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="doc" style="animation-delay: 0.7s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:file-document-outline" class="text-blue-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Documents</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="css" style="animation-delay: 0.8s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:css3" class="text-purple-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">CSS</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="js" style="animation-delay: 0.9s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:code-tags" class="text-indigo-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">JavaScript</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="scripts" style="animation-delay: 1s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:code-braces" class="text-purple-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Scripts</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="font" style="animation-delay: 1.1s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:font-awesome" class="text-gray-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Fonts</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="img" style="animation-delay: 1.2s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:image" class="text-orange-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Images</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="media" style="animation-delay: 1.3s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:video" class="text-red-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Media</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="wasm" style="animation-delay: 1.4s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:code-brackets" class="text-indigo-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">WebAssembly</span>
+                            </div>
+                        </button>
+                    </div>
+                    <!-- Advanced -->
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">Advanced</p>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-red-900/30 border border-red-800/40 hover:border-red-700/60 btn-smooth mode-btn font-medium stagger-item" data-mode="hidden" style="animation-delay: 1.5s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:eye-off" class="text-red-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Hidden APIs (Pro)</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-purple-900/30 border border-purple-800/40 hover:border-purple-700/60 btn-smooth mode-btn font-medium stagger-item" data-mode="graphql" style="animation-delay: 1.6s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:graphql" class="text-purple-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">GraphQL</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-secondary-900/30 border border-secondary-800/40 hover:border-secondary-700/60 btn-smooth mode-btn font-medium stagger-item" data-mode="ws" style="animation-delay: 1.7s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:message-text" class="text-secondary-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">WebSockets</span>
+                            </div>
+                        </button>
+                    </div>
+                    <!-- Special -->
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase font-semibold tracking-wider mb-2">Special Files</p>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-accent-900/30 border border-accent-800/40 hover:border-accent-700/60 btn-smooth mode-btn font-medium stagger-item" data-mode="sitemap" style="animation-delay: 1.8s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:sitemap" class="text-accent-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Sitemap</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg bg-gray-900/30 border border-gray-800/40 hover:border-gray-700/60 btn-smooth mode-btn font-medium stagger-item" data-mode="robots" style="animation-delay: 1.9s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:robot" class="text-gray-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Robots.txt</span>
+                            </div>
+                        </button>
+                        <button class="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:border-white/30 btn-smooth mode-btn font-medium stagger-item" data-mode="manifest" style="animation-delay: 2s;">
+                            <div class="flex items-center">
+                                <iconify-icon icon="mdi:application-edit" class="text-green-400 mr-3 w-5 h-5"></iconify-icon>
+                                <span class="text-sm">Manifest</span>
+                            </div>
+                        </button>
+                    </div>
                 </div>
-                <hr class="my-4 border-white/10">
-                <h3 class="text-sm font-semibold mb-3 text-white flex items-center">
-                    <iconify-icon icon="mdi:history" class="mr-2 text-accent-400"></iconify-icon>Recent Scans
+                <hr class="my-6 border-white/10">
+                <h3 class="text-sm font-bold mb-4 text-white flex items-center">
+                    <iconify-icon icon="mdi:history" class="mr-3 text-accent-400"></iconify-icon>Recent Scans
                 </h3>
-                <div id="historyList" class="space-y-2 max-h-40 overflow-y-auto text-xs"></div>
-                <div class="mt-4 p-3 bg-accent-900/20 rounded-md border border-accent-800/30">
-                    <p class="text-xs text-accent-300 font-medium">Pro Tip: Use proxies for geo-restricted targets.</p>
+                <div id="historyList" class="space-y-3 max-h-48 overflow-y-auto text-sm"></div>
+                <div class="mt-6 p-4 bg-gradient-to-r from-accent-900/20 to-primary-900/20 rounded-xl border border-accent-800/30">
+                    <p class="text-xs text-accent-300 font-semibold">Pro Tip: Use proxies for geo-restricted targets. Full Scan uncovers everything!</p>
                 </div>
             </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 p-4 ml-0 md:ml-64 transition-all">
+        <main class="flex-1 p-6 ml-0 md:ml-72 transition-all">
             <!-- Route Container -->
             <div id="routeContainer">
                 <!-- Scan Route -->
                 <div id="scanRoute" class="route active">
-                    <section class="glass rounded-xl p-6 mb-6 shadow-xl fade-in">
-                        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
-                            <div>
-                                <h2 class="text-3xl font-bold text-white mb-1 flex items-center">
-                                    <iconify-icon icon="mdi:target" class="mr-2 text-primary-400 w-6 h-6"></iconify-icon>Target Scan
+                    <section class="glass rounded-2xl p-8 mb-8 shadow-2xl fade-in gradient-card">
+                        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-6 lg:space-y-0">
+                            <div class="space-y-2">
+                                <h2 class="text-4xl font-bold text-white flex items-center">
+                                    <iconify-icon icon="mdi:target" class="mr-3 text-primary-400 w-8 h-8"></iconify-icon>Target Intelligence Scan
                                 </h2>
-                                <p class="text-gray-300 text-sm font-medium">Precision detection of hidden APIs and endpoints.</p>
+                                <p class="text-gray-300 text-lg font-medium">Uncover hidden APIs, resources, and endpoints with precision.</p>
                             </div>
-                            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
+                            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-6 w-full sm:w-auto">
                                 <div class="flex-1 relative">
-                                    <input type="url" id="urlInput" placeholder="https://x.com" class="w-full p-3 border border-white/10 rounded-lg bg-black/20 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent shadow-sm text-sm font-medium placeholder-gray-400">
+                                    <input type="url" id="urlInput" placeholder="https://x.com" class="w-full p-4 border border-white/10 rounded-xl bg-black/20 text-white focus:ring-4 focus:ring-primary-500/20 focus:border-transparent shadow-lg text-lg font-medium placeholder-gray-400">
                                 </div>
-                                <button id="analyzeBtn" class="px-6 py-3 bg-primary-600 text-white rounded-lg btn-smooth shadow-md font-semibold text-sm flex items-center justify-center hover:bg-primary-700">
-                                    <iconify-icon icon="mdi:rocket-launch" class="mr-2 w-4 h-4"></iconify-icon>
-                                    Scan
+                                <button id="analyzeBtn" class="px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl btn-smooth shadow-xl font-bold text-lg flex items-center justify-center hover:from-primary-700 hover:to-primary-800">
+                                    <iconify-icon icon="mdi:rocket-launch" class="mr-3 w-5 h-5"></iconify-icon>
+                                    Launch Scan
                                 </button>
                             </div>
                         </div>
-                        <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-                            <div class="p-4 rounded-lg bg-primary-900/20 border border-primary-800/30">
-                                <iconify-icon icon="mdi:chart-line" class="text-2xl text-primary-400 mb-2 block mx-auto"></iconify-icon>
-                                <p class="text-xs text-gray-300 font-medium">Scans: <span id="historyCount" class="font-semibold text-primary-400">0</span></p>
+                        <div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
+                            <div class="p-6 rounded-xl bg-primary-900/20 border border-primary-800/30 hover:bg-primary-900/30 transition-all duration-300">
+                                <iconify-icon icon="mdi:chart-line" class="text-3xl text-primary-400 mb-3 block mx-auto"></iconify-icon>
+                                <p class="text-sm text-gray-300 font-medium">Total Scans: <span id="historyCount" class="font-bold text-primary-400">0</span></p>
                             </div>
-                            <div class="p-4 rounded-lg bg-secondary-900/20 border border-secondary-800/30">
-                                <iconify-icon icon="mdi:shield-check" class="text-2xl text-secondary-400 mb-2 block mx-auto"></iconify-icon>
-                                <p class="text-xs text-gray-300 font-medium">Score: <span id="proScore" class="font-semibold text-secondary-400">0%</span></p>
+                            <div class="p-6 rounded-xl bg-secondary-900/20 border border-secondary-800/30 hover:bg-secondary-900/30 transition-all duration-300">
+                                <iconify-icon icon="mdi:shield-check" class="text-3xl text-secondary-400 mb-3 block mx-auto"></iconify-icon>
+                                <p class="text-sm text-gray-300 font-medium">Avg Score: <span id="proScore" class="font-bold text-secondary-400">0%</span></p>
                             </div>
-                            <div class="p-4 rounded-lg bg-accent-900/20 border border-accent-800/30">
+                            <div class="p-6 rounded-xl bg-accent-900/20 border border-accent-800/30">
                                 <div class="dropdown" id="filterDropdown">
-                                    <div class="dropdown-toggle text-xs bg-transparent border border-accent-700/50 text-accent-300 rounded-lg p-2 font-medium">
-                                        All <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
+                                    <div class="dropdown-toggle text-sm bg-transparent border border-accent-700/50 text-accent-300 rounded-xl p-3 font-medium">
+                                        All <iconify-icon icon="mdi:chevron-down" class="ml-2 text-sm"></iconify-icon>
                                     </div>
-                                    <div class="dropdown-menu mt-1">
-                                        <div class="dropdown-item text-xs" data-filter="All">All</div>
-                                        <div class="dropdown-item text-xs" data-filter="POST">POST</div>
-                                        <div class="dropdown-item text-xs" data-filter="GET">GET</div>
-                                        <div class="dropdown-item text-xs" data-filter="High Score (>0.8)">High Score</div>
-                                        <div class="dropdown-item text-xs" data-filter="Hidden">Hidden</div>
+                                    <div class="dropdown-menu mt-2">
+                                        <div class="dropdown-item text-sm" data-filter="All">All</div>
+                                        <div class="dropdown-item text-sm" data-filter="POST">POST</div>
+                                        <div class="dropdown-item text-sm" data-filter="GET">GET</div>
+                                        <div class="dropdown-item text-sm" data-filter="High Score (>0.8)">High Score</div>
+                                        <div class="dropdown-item text-sm" data-filter="Hidden">Hidden</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="p-4 rounded-lg bg-gray-900/20 border border-gray-800/30">
+                            <div class="p-6 rounded-xl bg-gray-900/20 border border-gray-800/30">
                                 <div class="dropdown" id="proxyDropdown">
-                                    <div class="dropdown-toggle text-xs bg-transparent border border-gray-700/50 text-gray-300 rounded-lg p-2 font-medium">
-                                        No Proxy <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
+                                    <div class="dropdown-toggle text-sm bg-transparent border border-gray-700/50 text-gray-300 rounded-xl p-3 font-medium">
+                                        No Proxy <iconify-icon icon="mdi:chevron-down" class="ml-2 text-sm"></iconify-icon>
                                     </div>
-                                    <div class="dropdown-menu mt-1">
-                                        <div class="dropdown-item text-xs" data-proxy="No Proxy">No Proxy</div>
-                                        <div class="dropdown-item text-xs" data-proxy="Rotate Free Proxies">Rotate Proxies</div>
+                                    <div class="dropdown-menu mt-2">
+                                        <div class="dropdown-item text-sm" data-proxy="No Proxy">No Proxy</div>
+                                        <div class="dropdown-item text-sm" data-proxy="Rotate Free Proxies">Rotate Proxies</div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- Progress Bar Section -->
+                    <section id="progressSection" class="glass rounded-2xl p-8 mb-8 hidden shadow-2xl fade-in gradient-card">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-10 h-10 bg-primary-500/20 rounded-xl flex items-center justify-center animate-pulse">
+                                    <iconify-icon icon="mdi:progress-clock" class="text-primary-400 w-6 h-6"></iconify-icon>
+                                </div>
+                                <div>
+                                    <p id="progressText" class="text-lg font-bold text-white">Initializing scan...</p>
+                                    <p class="text-sm text-gray-400">Estimated time: <span id="etaText">30s</span></p>
+                                </div>
+                            </div>
+                            <button id="cancelScan" class="px-6 py-3 bg-red-600 text-white rounded-xl btn-smooth text-sm font-bold hover:bg-red-700 hidden">Cancel Scan</button>
+                        </div>
+                        <div class="progress-bar mb-4">
+                            <div id="progressFill" class="progress-fill" style="--progress-width: 0%;"></div>
+                        </div>
+                        <div class="flex justify-between text-sm text-gray-400">
+                            <span id="progressPercent">0%</span>
+                            <span id="progressStage">Stage 1/4</span>
                         </div>
                     </section>
 
                     <!-- Stats Dashboard -->
-                    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 hidden" id="statsSection">
-                        <div class="glass rounded-lg p-4 text-center card-hover">
-                            <canvas id="distributionChart" class="pie-chart-container mb-3" width="120" height="120"></canvas>
-                            <h3 class="font-semibold text-lg">Distribution</h3>
-                            <p class="text-xs text-gray-400">POST/GET</p>
+                    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden" id="statsSection">
+                        <div class="glass rounded-xl p-6 text-center card-hover gradient-card">
+                            <canvas id="distributionChart" class="pie-chart-container mb-4" width="120" height="120"></canvas>
+                            <h3 class="font-bold text-xl">Distribution</h3>
+                            <p class="text-sm text-gray-400">POST/GET Ratio</p>
                         </div>
-                        <div class="glass rounded-lg p-4 text-center card-hover">
-                            <iconify-icon icon="mdi:fire" class="text-3xl text-red-400 mb-3 block mx-auto"></iconify-icon>
-                            <h3 class="font-semibold text-lg" id="highScoreCount">0</h3>
-                            <p class="text-xs text-gray-400">Hits</p>
+                        <div class="glass rounded-xl p-6 text-center card-hover gradient-card">
+                            <iconify-icon icon="mdi:fire" class="text-4xl text-red-400 mb-4 block mx-auto animate-bounce-subtle"></iconify-icon>
+                            <h3 class="font-bold text-xl" id="highScoreCount">0</h3>
+                            <p class="text-sm text-gray-400">High Hits</p>
                         </div>
-                        <div class="glass rounded-lg p-4 text-center card-hover">
-                            <iconify-icon icon="mdi:clock-outline" class="text-3xl text-accent-400 mb-3 block mx-auto"></iconify-icon>
-                            <h3 class="font-semibold text-lg" id="scanTime">0s</h3>
-                            <p class="text-xs text-gray-400">Duration</p>
+                        <div class="glass rounded-xl p-6 text-center card-hover gradient-card">
+                            <iconify-icon icon="mdi:clock-outline" class="text-4xl text-accent-400 mb-4 block mx-auto"></iconify-icon>
+                            <h3 class="font-bold text-xl" id="scanTime">0s</h3>
+                            <p class="text-sm text-gray-400">Scan Duration</p>
                         </div>
-                        <div class="glass rounded-lg p-4 text-center card-hover">
-                            <iconify-icon icon="mdi:share-variant" class="text-3xl text-primary-400 mb-3 block mx-auto"></iconify-icon>
-                            <button id="shareBtn" class="text-xs bg-primary-600 text-white px-3 py-1.5 rounded-md hover:bg-primary-700 btn-smooth font-medium">Share</button>
+                        <div class="glass rounded-xl p-6 text-center card-hover gradient-card">
+                            <iconify-icon icon="mdi:share-variant" class="text-4xl text-primary-400 mb-4 block mx-auto"></iconify-icon>
+                            <button id="shareBtn" class="text-sm bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 btn-smooth font-bold">Share Results</button>
                         </div>
                     </section>
 
                     <!-- Results -->
-                    <section class="space-y-4">
-                        <div id="loadingSkeletons" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
-                            <div class="card-hover glass rounded-lg p-4 skeleton-shimmer h-48"></div>
-                            <div class="card-hover glass rounded-lg p-4 skeleton-shimmer h-48"></div>
-                            <div class="card-hover glass rounded-lg p-4 skeleton-shimmer h-48"></div>
-                            <div class="card-hover glass rounded-lg p-4 skeleton-shimmer h-48"></div>
+                    <section class="space-y-6">
+                        <div id="loadingSkeletons" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 hidden">
+                            <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-56"></div>
+                            <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-56"></div>
+                            <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-56"></div>
+                            <div class="card-hover glass rounded-xl p-6 skeleton-shimmer h-56"></div>
                         </div>
-                        <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 hidden"></div>
-                        <div id="noResults" class="text-center py-12 hidden col-span-full">
-                            <iconify-icon icon="mdi:magnify-scan" class="text-6xl text-gray-500 mb-4 block mx-auto"></iconify-icon>
-                            <h3 class="text-2xl font-semibold text-gray-400 mb-2">No Data</h3>
-                            <p class="text-gray-500 text-sm mb-4">Run a scan to discover endpoints.</p>
-                            <button class="px-6 py-2 bg-primary-600 text-white rounded-lg btn-smooth font-semibold text-sm" onclick="analyze()">Scan Now</button>
+                        <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 hidden"></div>
+                        <div id="noResults" class="text-center py-16 hidden col-span-full">
+                            <iconify-icon icon="mdi:magnify-scan" class="text-8xl text-gray-500 mb-6 block mx-auto animate-pulse"></iconify-icon>
+                            <h3 class="text-3xl font-bold text-gray-400 mb-3">No Endpoints Found</h3>
+                            <p class="text-gray-500 text-lg mb-6">Launch a scan to discover hidden intelligence.</p>
+                            <button class="px-8 py-4 bg-primary-600 text-white rounded-xl btn-smooth font-bold text-lg" onclick="analyze()">Launch Scan</button>
                         </div>
                     </section>
 
                     <!-- Export Footer -->
-                    <footer class="glass rounded-xl p-4 mt-8 text-center">
-                        <div class="flex justify-center space-x-2 flex-wrap gap-2">
-                            <button id="exportJson" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 btn-smooth text-xs font-medium">
-                                <iconify-icon icon="mdi:file-document" class="mr-1.5 w-3 h-3 inline"></iconify-icon>JSON
+                    <footer class="glass rounded-2xl p-6 mt-12 text-center gradient-card">
+                        <div class="flex justify-center space-x-3 flex-wrap gap-3">
+                            <button id="exportJson" class="px-6 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-600 btn-smooth text-sm font-bold">
+                                <iconify-icon icon="mdi:file-document" class="mr-2 w-4 h-4 inline"></iconify-icon>JSON
                             </button>
-                            <button id="exportCsv" class="px-4 py-2 bg-secondary-700 text-white rounded-lg hover:bg-secondary-600 btn-smooth text-xs font-medium">
-                                <iconify-icon icon="mdi:file-delimited" class="mr-1.5 w-3 h-3 inline"></iconify-icon>CSV
+                            <button id="exportCsv" class="px-6 py-3 bg-secondary-700 text-white rounded-xl hover:bg-secondary-600 btn-smooth text-sm font-bold">
+                                <iconify-icon icon="mdi:file-delimited" class="mr-2 w-4 h-4 inline"></iconify-icon>CSV
                             </button>
-                            <button id="exportPdf" class="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-600 btn-smooth text-xs font-medium">
-                                <iconify-icon icon="mdi:file-pdf" class="mr-1.5 w-3 h-3 inline"></iconify-icon>PDF
+                            <button id="exportPdf" class="px-6 py-3 bg-purple-700 text-white rounded-xl hover:bg-purple-600 btn-smooth text-sm font-bold">
+                                <iconify-icon icon="mdi:file-pdf" class="mr-2 w-4 h-4 inline"></iconify-icon>PDF
                             </button>
-                            <button id="clearHistory" class="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 btn-smooth text-xs font-medium">
-                                <iconify-icon icon="mdi:delete" class="mr-1.5 w-3 h-3 inline"></iconify-icon>Clear
+                            <button id="clearHistory" class="px-6 py-3 bg-red-700 text-white rounded-xl hover:bg-red-600 btn-smooth text-sm font-bold">
+                                <iconify-icon icon="mdi:delete" class="mr-2 w-4 h-4 inline"></iconify-icon>Clear History
                             </button>
                         </div>
-                        <p class="text-xs text-gray-500 mt-4 flex items-center justify-center font-medium">
-                            <iconify-icon icon="mdi:shield-check-outline" class="mr-2 w-4 h-4"></iconify-icon>Ethical | robots.txt | © 2025 xetchers
+                        <p class="text-sm text-gray-500 mt-6 flex items-center justify-center font-semibold">
+                            <iconify-icon icon="mdi:shield-check-outline" class="mr-3 w-5 h-5"></iconify-icon>Ethical Scanning | Respect robots.txt | © 2025 xetchers
                         </p>
                     </footer>
                 </div>
 
                 <!-- History Route -->
                 <div id="historyRoute" class="route hidden">
-                    <section class="glass rounded-xl p-6 mb-6 shadow-xl fade-in">
-                        <h2 class="text-3xl font-bold text-white mb-4 flex items-center">
-                            <iconify-icon icon="mdi:history" class="mr-2 text-accent-400 w-6 h-6"></iconify-icon>History
+                    <section class="glass rounded-2xl p-8 mb-8 shadow-2xl fade-in gradient-card">
+                        <h2 class="text-4xl font-bold text-white mb-6 flex items-center">
+                            <iconify-icon icon="mdi:history" class="mr-3 text-accent-400 w-8 h-8"></iconify-icon>Scan History
                         </h2>
-                        <div id="historyGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                        <div id="historyGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                     </section>
                 </div>
 
                 <!-- Settings Route -->
                 <div id="settingsRoute" class="route hidden">
-                    <section class="glass rounded-xl p-6 mb-6 shadow-xl fade-in">
-                        <h2 class="text-3xl font-bold text-white mb-4 flex items-center">
-                            <iconify-icon icon="mdi:cog" class="mr-2 text-secondary-400 w-6 h-6"></iconify-icon>Settings
+                    <section class="glass rounded-2xl p-8 mb-8 shadow-2xl fade-in gradient-card">
+                        <h2 class="text-4xl font-bold text-white mb-6 flex items-center">
+                            <iconify-icon icon="mdi:cog" class="mr-3 text-secondary-400 w-8 h-8"></iconify-icon>Settings
                         </h2>
-                        <div class="space-y-4">
-                            <div class="p-4 border border-white/10 rounded-lg">
-                                <h3 class="font-semibold mb-3 text-white flex items-center">Proxies</h3>
-                                <textarea id="proxyList" class="w-full p-3 border border-white/10 rounded-lg bg-black/20 text-white text-sm font-mono resize-none" placeholder="proxy1:port&#10;proxy2:port" rows="3"></textarea>
-                                <button id="saveProxies" class="mt-3 px-4 py-2 bg-secondary-600 text-white rounded-lg btn-smooth font-medium text-sm">Save</button>
+                        <div class="space-y-6">
+                            <div class="p-6 border border-white/10 rounded-xl gradient-card">
+                                <h3 class="font-bold mb-4 text-white flex items-center text-xl">Proxy Configuration</h3>
+                                <textarea id="proxyList" class="w-full p-4 border border-white/10 rounded-xl bg-black/20 text-white text-sm font-mono resize-none" placeholder="proxy1:port&#10;proxy2:port" rows="4"></textarea>
+                                <button id="saveProxies" class="mt-4 px-6 py-3 bg-secondary-600 text-white rounded-xl btn-smooth font-bold text-sm">Save Proxies</button>
                             </div>
-                            <div class="p-4 border border-white/10 rounded-lg">
-                                <h3 class="font-semibold mb-3 text-white flex items-center">Language</h3>
+                            <div class="p-6 border border-white/10 rounded-xl gradient-card">
+                                <h3 class="font-bold mb-4 text-white flex items-center text-xl">Language</h3>
                                 <div class="dropdown">
-                                    <div class="dropdown-toggle p-3 border border-white/10 rounded-lg bg-black/20 text-white text-sm font-medium w-full md:w-auto">
-                                        English <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>
+                                    <div class="dropdown-toggle p-4 border border-white/10 rounded-xl bg-black/20 text-white text-sm font-bold w-full md:w-auto">
+                                        English <iconify-icon icon="mdi:chevron-down" class="ml-2 text-sm"></iconify-icon>
                                     </div>
-                                    <div class="dropdown-menu mt-1 w-full">
+                                    <div class="dropdown-menu mt-2 w-full">
                                         <div class="dropdown-item text-sm" data-lang="en">English</div>
                                         <div class="dropdown-item text-sm" data-lang="hi">Hindi</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="p-4 border border-white/10 rounded-lg">
-                                <h3 class="font-semibold mb-3 text-white flex items-center">PWA</h3>
-                                <button id="installPWA" class="px-4 py-2 bg-primary-600 text-white rounded-lg btn-smooth font-medium text-sm">Install</button>
-                                <p class="text-xs text-gray-400 mt-2 font-medium">Offline scans enabled.</p>
+                            <div class="p-6 border border-white/10 rounded-xl gradient-card">
+                                <h3 class="font-bold mb-4 text-white flex items-center text-xl">PWA Installation</h3>
+                                <button id="installPWA" class="px-6 py-3 bg-primary-600 text-white rounded-xl btn-smooth font-bold text-sm">Install App</button>
+                                <p class="text-sm text-gray-400 mt-3 font-medium">Enable offline scans and faster access.</p>
                             </div>
                         </div>
                     </section>
@@ -364,7 +500,7 @@
     </div>
 
     <!-- Toast -->
-    <div id="toast" class="toast p-3 rounded-lg shadow-xl text-white font-medium"></div>
+    <div id="toast" class="toast p-4 rounded-xl shadow-2xl text-white font-bold"></div>
 
     <script>
         // Router
@@ -391,6 +527,8 @@
         const maxHistory = 20;
         let lastItems = [];
         let distributionChart = null;
+        let progressInterval = null;
+        let cancelController = null;
 
         // DOM Elements
         const sidebar = document.getElementById('sidebar');
@@ -415,6 +553,22 @@
         const saveProxies = document.getElementById('saveProxies');
         const installPWA = document.getElementById('installPWA');
         const distributionCanvas = document.getElementById('distributionChart');
+        const progressSection = document.getElementById('progressSection');
+        const progressText = document.getElementById('progressText');
+        const etaText = document.getElementById('etaText');
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressStage = document.getElementById('progressStage');
+        const cancelScan = document.getElementById('cancelScan');
+
+        // Stagger Animation for Sidebar
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.stagger-item').forEach((el, idx) => {
+                el.style.opacity = '0';
+                el.style.animationDelay = `${idx * 0.05}s`;
+                setTimeout(() => el.style.opacity = '1', idx * 50);
+            });
+        });
 
         // Theme (Fixed Dark)
         themeToggle.addEventListener('click', () => {
@@ -450,9 +604,8 @@
                     const text = item.textContent.trim();
                     const iconMatch = text.match(/ <iconify-icon.*<\/iconify-icon>$/);
                     const cleanText = iconMatch ? text.replace(iconMatch[0], '') : text;
-                    toggle.innerHTML = `${cleanText} <iconify-icon icon="mdi:chevron-down" class="ml-1 text-xs"></iconify-icon>`;
+                    toggle.innerHTML = `${cleanText} <iconify-icon icon="mdi:chevron-down" class="ml-2 text-sm"></iconify-icon>`;
                     dropdown.classList.remove('open');
-                    // Handle specific actions
                     if (item.dataset.lang) showToast(`Language: ${item.dataset.lang.toUpperCase()}`);
                     if (item.dataset.filter) {
                         currentFilter = item.dataset.filter;
@@ -485,9 +638,10 @@
         // Mode Selection
         document.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active', 'bg-primary-900/20', 'border-primary-800/30'));
-                btn.classList.add('active', 'bg-primary-900/20', 'border-primary-800/30');
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active', 'bg-primary-900/30', 'border-primary-800/40'));
+                btn.classList.add('active', 'bg-primary-900/30', 'border-primary-800/40');
                 currentMode = btn.dataset.mode;
+                showToast(`Mode: ${btn.querySelector('span').textContent}`);
             });
         });
 
@@ -495,14 +649,14 @@
         function renderHistory(grid = false) {
             const list = grid ? historyGrid : historyList;
             list.innerHTML = scanHistory.slice(-maxHistory).reverse().map(h => `
-                <div class="p-3 border border-white/10 rounded-lg btn-smooth cursor-pointer card-hover font-medium text-xs fade-in" onclick="loadHistory('${h.url}', '${h.mode}')">
+                <div class="p-4 border border-white/10 rounded-xl btn-smooth cursor-pointer card-hover font-semibold text-sm fade-in gradient-card" onclick="loadHistory('${h.url}', '${h.mode}')">
                     <div class="flex justify-between items-start">
                         <div class="flex items-center">
-                            <iconify-icon icon="mdi:target" class="mr-2 text-primary-400 w-3 h-3"></iconify-icon>
-                            <span class="font-semibold">${h.mode.toUpperCase()}</span>
+                            <iconify-icon icon="mdi:target" class="mr-3 text-primary-400 w-4 h-4"></iconify-icon>
+                            <span class="font-bold">${h.mode.toUpperCase()}</span>
                         </div>
-                        <div class="text-right ml-2">
-                            <p class="text-xs font-medium truncate">${h.url}</p>
+                        <div class="text-right ml-3">
+                            <p class="text-sm font-medium truncate">${h.url}</p>
                             <p class="text-xs text-gray-500">${new Date(h.timestamp).toLocaleDateString()}</p>
                             <p class="text-xs text-gray-500">${h.count} items</p>
                         </div>
@@ -523,7 +677,7 @@
         saveProxies.addEventListener('click', () => {
             proxies = document.getElementById('proxyList').value.split('\n').map(p => p.trim()).filter(p => p);
             localStorage.setItem('proxies', JSON.stringify(proxies));
-            showToast('Proxies saved.');
+            showToast('Proxies saved successfully.');
         });
         document.getElementById('proxyList').value = proxies.join('\n');
 
@@ -537,7 +691,7 @@
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                showToast(outcome === 'accepted' ? 'Installed.' : 'Canceled.');
+                showToast(outcome === 'accepted' ? 'App installed!' : 'Installation canceled.');
                 deferredPrompt = null;
             }
         });
@@ -560,31 +714,86 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
+                    plugins: { legend: { display: false } },
+                    animation: { duration: 2000, easing: 'easeOutQuart' }
                 }
             });
+        }
+
+        // Progress Functions
+        function startProgress() {
+            progressSection.classList.remove('hidden');
+            loadingSkeletons.classList.add('hidden');
+            resultsGrid.classList.add('hidden');
+            statsSection.classList.add('hidden');
+            noResults.classList.add('hidden');
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<iconify-icon icon="mdi:loading" class="mr-3 w-5 h-5 animate-spin"></iconify-icon>Scanning...';
+            cancelController = new AbortController();
+            cancelScan.classList.remove('hidden');
+            let progress = 0;
+            let stage = 1;
+            const stages = [
+                { text: 'Fetching page & resources...', percent: 25, eta: '30s' },
+                { text: 'Analyzing JavaScript & patterns...', percent: 50, eta: '20s' },
+                { text: 'Extracting dynamic endpoints...', percent: 75, eta: '10s' },
+                { text: 'Compiling results...', percent: 90, eta: '5s' }
+            ];
+            progressInterval = setInterval(() => {
+                if (progress < stages[stage - 1].percent) {
+                    progress += Math.random() * 5 + 1;
+                    if (progress > stages[stage - 1].percent) {
+                        progress = stages[stage - 1].percent;
+                        if (stage < stages.length) stage++;
+                    }
+                } else if (progress < 90) {
+                    progress += 0.5;
+                }
+                updateProgress(progress, stages[stage - 1] || stages[stages.length - 1]);
+            }, 200);
+        }
+
+        function updateProgress(percent, stageInfo) {
+            progressFill.style.width = `${percent}%`;
+            progressPercent.textContent = `${Math.round(percent)}%`;
+            progressText.textContent = stageInfo.text;
+            etaText.textContent = stageInfo.eta;
+            progressStage.textContent = `Stage ${Math.min(stage, 4)}/4`;
+        }
+
+        function stopProgress(success = true) {
+            if (progressInterval) clearInterval(progressInterval);
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<iconify-icon icon="mdi:rocket-launch" class="mr-3 w-5 h-5"></iconify-icon>Launch Scan';
+            cancelScan.classList.add('hidden');
+            progressSection.classList.add('hidden');
+            if (cancelController) cancelController.abort();
+            if (success) {
+                progressFill.style.width = '100%';
+                progressPercent.textContent = '100%';
+                progressText.textContent = 'Scan complete!';
+                setTimeout(() => progressSection.classList.add('hidden'), 1500);
+            }
         }
 
         // Analyze
         async function analyze() {
             const url = urlInput.value.trim();
             if (!url.startsWith('http')) {
-                showToast('Invalid URL.', 'error');
+                showToast('Invalid URL format.', 'error');
                 return;
             }
             const useProxy = currentProxy === 'Rotate Free Proxies' ? proxies[0] || '' : '';
 
-            loadingSkeletons.classList.remove('hidden');
-            resultsGrid.classList.add('hidden');
-            statsSection.classList.add('hidden');
-            noResults.classList.add('hidden');
+            startProgress();
 
             const startTime = Date.now();
             try {
                 const response = await fetch('/api/fetch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, mode: currentMode, proxy: useProxy })
+                    body: JSON.stringify({ url, mode: currentMode, proxy: useProxy }),
+                    signal: cancelController ? cancelController.signal : undefined
                 });
 
                 if (!response.ok) {
@@ -594,7 +803,7 @@
 
                 const data = await response.json();
                 const endTime = Date.now();
-                loadingSkeletons.classList.add('hidden');
+                stopProgress(true);
 
                 if (data.error) {
                     throw new Error(data.error);
@@ -603,7 +812,7 @@
                 lastItems = data.items || [];
                 const count = data.found || data.count || lastItems.length;
                 const pageInfo = data.pageInfo || {};
-                showToast(`${count} found in ${((endTime - startTime)/1000).toFixed(1)}s! ${useProxy ? '(Via Proxy)' : ''}`);
+                showToast(`${count} endpoints discovered in ${((endTime - startTime)/1000).toFixed(1)}s! ${useProxy ? '(Via Proxy)' : ''}`);
 
                 // Update stats
                 document.getElementById('highScoreCount').textContent = lastItems.filter(i => (i.score || 0) > 0.8).length;
@@ -611,9 +820,9 @@
                 const avgScore = Math.round((lastItems.reduce((sum, i) => sum + (i.score || 0), 0) / count * 100) || 0);
                 document.getElementById('proScore').textContent = `${avgScore}%`;
 
-                // Page info integration (if available)
+                // Page info
                 if (pageInfo.title) {
-                    showToast(`Page: ${pageInfo.title} | Load: ${pageInfo.loadTime ? (pageInfo.loadTime / 1000).toFixed(1) + 's' : 'N/A'}`, 'info');
+                    showToast(`Title: ${pageInfo.title} | Load Time: ${pageInfo.loadTime ? (pageInfo.loadTime / 1000).toFixed(1) + 's' : 'N/A'}`, 'info');
                 }
 
                 // Chart
@@ -633,16 +842,20 @@
                 statsSection.classList.remove('hidden');
                 resultsGrid.classList.remove('hidden');
             } catch (error) {
-                loadingSkeletons.classList.add('hidden');
-                showToast(`Error: ${error.message}`, 'error');
-                noResults.classList.remove('hidden');
+                if (error.name === 'AbortError') {
+                    showToast('Scan canceled by user.', 'error');
+                } else {
+                    stopProgress(false);
+                    showToast(`Scan failed: ${error.message}`, 'error');
+                    noResults.classList.remove('hidden');
+                }
                 console.error(error);
             }
         }
 
         function renderResults(items) {
             if (items.length === 0) {
-                resultsGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8 text-sm font-medium">No results. Refine filters.</div>';
+                resultsGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-12 text-lg font-medium">No results match the filter. Try adjusting your scan mode.</div>';
                 return;
             }
             resultsGrid.innerHTML = items.map((item, idx) => {
@@ -652,22 +865,22 @@
                 const headersSummary = item.reqHeaders ? Object.keys(item.reqHeaders).slice(0, 2).map(k => `${k}: ${item.reqHeaders[k]}`).join(', ') : '';
                 const status = item.status ? `Status: ${item.status}` : '';
                 return `
-                    <div class="card-hover glass rounded-lg p-4 border border-white/10 relative fade-in" style="animation-delay: ${idx * 0.05}s;">
-                        <div class="absolute top-2 right-2 ${methodClass} category-badge">${item.method || 'N/A'}</div>
-                        <h3 class="font-semibold text-sm mb-2 flex items-center justify-between">
+                    <div class="card-hover glass rounded-xl p-6 border border-white/10 relative fade-in gradient-card stagger-item" style="animation-delay: ${idx * 0.06}s;">
+                        <div class="absolute top-3 right-3 ${methodClass} category-badge">${item.method || 'N/A'}</div>
+                        <h3 class="font-bold text-base mb-3 flex items-center justify-between">
                             <span class="line-clamp-2">${title}</span>
-                            <span class="text-xs text-secondary-400 font-bold">${((item.score || 0) * 100).toFixed(0)}%</span>
+                            <span class="text-sm text-secondary-400 font-bold">${((item.score || 0) * 100).toFixed(0)}%</span>
                         </h3>
-                        <p class="text-xs text-gray-400 mb-2 line-clamp-2">${context}</p>
-                        ${status ? `<p class="text-xs text-gray-500 mb-2">${status}</p>` : ''}
-                        ${headersSummary ? `<p class="text-xs text-gray-500 mb-3 font-mono">${headersSummary}${Object.keys(item.reqHeaders || {}).length > 2 ? '...' : ''}</p>` : ''}
-                        <div class="flex space-x-1">
-                            <input class="flex-1 p-2 text-xs bg-black/20 rounded-lg border border-white/10 font-mono" value="${item.url || item.href || ''}" readonly>
-                            <button onclick="copyToClipboard('${item.url || item.href || ''}')" class="p-2 text-primary-400 hover:text-primary-300 rounded-lg btn-smooth">
-                                <iconify-icon icon="mdi:content-copy" class="w-4 h-4"></iconify-icon>
+                        <p class="text-sm text-gray-400 mb-3 line-clamp-2">${context}</p>
+                        ${status ? `<p class="text-sm text-gray-500 mb-3">${status}</p>` : ''}
+                        ${headersSummary ? `<p class="text-xs text-gray-500 mb-4 font-mono">${headersSummary}${Object.keys(item.reqHeaders || {}).length > 2 ? '...' : ''}</p>` : ''}
+                        <div class="flex space-x-2">
+                            <input class="flex-1 p-3 text-sm bg-black/20 rounded-xl border border-white/10 font-mono" value="${item.url || item.href || ''}" readonly>
+                            <button onclick="copyToClipboard('${item.url || item.href || ''}')" class="p-3 text-primary-400 hover:text-primary-300 rounded-xl btn-smooth">
+                                <iconify-icon icon="mdi:content-copy" class="w-5 h-5"></iconify-icon>
                             </button>
-                            <a href="${item.url || item.href || '#'}" target="_blank" class="p-2 text-secondary-400 hover:text-secondary-300 rounded-lg btn-smooth">
-                                <iconify-icon icon="mdi:open-in-new" class="w-4 h-4"></iconify-icon>
+                            <a href="${item.url || item.href || '#'}" target="_blank" class="p-3 text-secondary-400 hover:text-secondary-300 rounded-xl btn-smooth">
+                                <iconify-icon icon="mdi:open-in-new" class="w-5 h-5"></iconify-icon>
                             </a>
                         </div>
                     </div>
@@ -676,36 +889,35 @@
         }
 
         function showToast(msg, type = 'success') {
-            toast.innerHTML = `<iconify-icon icon="mdi:${type === 'error' ? 'alert-circle' : type === 'info' ? 'information' : 'check-circle'}" class="mr-2 w-4 h-4"></iconify-icon>${msg}`;
-            toast.className = `toast p-3 rounded-lg shadow-xl text-white font-medium bg-${type === 'error' ? 'red' : type === 'info' ? 'blue' : 'secondary'}-600`;
+            toast.innerHTML = `<iconify-icon icon="mdi:${type === 'error' ? 'alert-circle' : type === 'info' ? 'information' : 'check-circle'}" class="mr-3 w-5 h-5"></iconify-icon>${msg}`;
+            toast.className = `toast p-4 rounded-xl shadow-2xl text-white font-bold bg-${type === 'error' ? 'red' : type === 'info' ? 'blue' : 'secondary'}-600`;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            setTimeout(() => toast.classList.remove('show'), 4000);
         }
 
         function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => showToast('Copied.'));
+            navigator.clipboard.writeText(text).then(() => showToast('Endpoint copied to clipboard!'));
         }
 
         function exportData(type) {
             const items = JSON.parse(localStorage.getItem('lastResults') || '[]');
-            if (items.length === 0) return showToast('No data.', 'error');
+            if (items.length === 0) return showToast('No data to export.', 'error');
             if (type === 'json') {
                 const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-                downloadBlob(blob, `xetchers-v5-${currentMode}-${Date.now()}.json`);
+                downloadBlob(blob, `xetchers-v5.1-${currentMode}-${Date.now()}.json`);
             } else if (type === 'csv') {
                 let csv = 'Method,URL,Category,Context,Score,Status\n';
                 items.forEach(item => csv += `"${item.method || ''}","${item.url || item.href || ''}","${item.category || ''}","${item.context || item.source || ''}","${((item.score || 0)).toFixed(2)}","${item.status || ''}"\n`);
                 const blob = new Blob([csv], { type: 'text/csv' });
-                downloadBlob(blob, `xetchers-v5-${currentMode}-${Date.now()}.csv`);
+                downloadBlob(blob, `xetchers-v5.1-${currentMode}-${Date.now()}.csv`);
             } else if (type === 'pdf') {
-                // Backend call for PDF
                 fetch('/api/fetch', { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: 'pdf', mode: 'export' }) 
                 }).then(r => r.blob()).then(blob => downloadBlob(blob, 'results.pdf')).catch(() => showToast('PDF export failed.', 'error'));
             }
-            showToast(`${type.toUpperCase()} exported.`);
+            showToast(`${type.toUpperCase()} exported successfully.`);
         }
 
         function downloadBlob(blob, filename) {
@@ -718,8 +930,14 @@
 
         function shareResults() {
             const shareUrl = `${window.location.origin}${window.location.hash}?url=${encodeURIComponent(urlInput.value)}&mode=${currentMode}`;
-            navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied.'));
+            navigator.clipboard.writeText(shareUrl).then(() => showToast('Share link copied to clipboard!'));
         }
+
+        // Cancel Scan
+        cancelScan.addEventListener('click', () => {
+            stopProgress(false);
+            showToast('Scan canceled.', 'error');
+        });
 
         // Events
         analyzeBtn.addEventListener('click', analyze);
@@ -731,7 +949,7 @@
             scanHistory = [];
             localStorage.removeItem('scanHistory');
             renderHistory();
-            showToast('Cleared.');
+            showToast('History cleared.');
         });
         shareBtn.addEventListener('click', shareResults);
 
